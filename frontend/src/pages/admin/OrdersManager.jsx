@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { api } from '../../api.js';
 import PrintDeliverySlip from '../../components/PrintDeliverySlip.jsx';
+import PrintThermalReceipt from '../../components/PrintThermalReceipt.jsx';
 import {
   Search,
   Filter,
   Calendar,
   Eye,
   Printer,
+  Receipt,
   Trash2,
   Clock,
   CheckCircle,
@@ -35,6 +37,9 @@ export default function OrdersManager({ settings = {} }) {
 
   // Selected Order for Printable Delivery Slip
   const [printOrder, setPrintOrder] = useState(null);
+
+  // Selected Order for Thermal Receipt
+  const [thermalOrder, setThermalOrder] = useState(null);
 
   // Status updating state
   const [updatingId, setUpdatingId] = useState(null);
@@ -108,6 +113,22 @@ export default function OrdersManager({ settings = {} }) {
       }
     } catch (err) {
       alert('Failed to load order for printing');
+    }
+  };
+
+  const openThermalReceipt = async (orderOrId) => {
+    if (typeof orderOrId === 'object' && orderOrId?.items) {
+      setThermalOrder(orderOrId);
+      return;
+    }
+    try {
+      const orderId = typeof orderOrId === 'object' ? orderOrId.id : orderOrId;
+      const res = await api.getAdminOrder(orderId);
+      if (res.success && res.order) {
+        setThermalOrder(res.order);
+      }
+    } catch (err) {
+      alert('Failed to load order for thermal receipt');
     }
   };
 
@@ -303,6 +324,14 @@ export default function OrdersManager({ settings = {} }) {
                         </button>
 
                         <button
+                          onClick={() => openThermalReceipt(ord.id)}
+                          className="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          title={t('printThermalReceipt')}
+                        >
+                          <Receipt className="w-4 h-4" />
+                        </button>
+
+                        <button
                           onClick={() => handleDeleteOrder(ord.id)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Delete Order"
@@ -402,14 +431,24 @@ export default function OrdersManager({ settings = {} }) {
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-between">
-                <button
-                  onClick={() => openPrintSlip(selectedOrder.id)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Delivery Slip</span>
-                </button>
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openPrintSlip(selectedOrder.id)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print Delivery Slip</span>
+                  </button>
+
+                  <button
+                    onClick={() => openThermalReceipt(selectedOrder)}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md transition-colors"
+                  >
+                    <Receipt className="w-4 h-4 text-amber-400" />
+                    <span>{t('printThermalReceipt')}</span>
+                  </button>
+                </div>
 
                 <button
                   onClick={() => setSelectedOrder(null)}
@@ -429,6 +468,19 @@ export default function OrdersManager({ settings = {} }) {
           order={printOrder}
           settings={settings}
           onClose={() => setPrintOrder(null)}
+          onOpenThermal={(ord) => {
+            setPrintOrder(null);
+            openThermalReceipt(ord);
+          }}
+        />
+      )}
+
+      {/* Print Thermal Receipt Modal */}
+      {thermalOrder && (
+        <PrintThermalReceipt
+          order={thermalOrder}
+          settings={settings}
+          onClose={() => setThermalOrder(null)}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Printer, X } from 'lucide-react';
+import { Printer, Receipt, X } from 'lucide-react';
 
-export default function PrintDeliverySlip({ order, onClose, settings = {} }) {
+export default function PrintDeliverySlip({ order, onClose, onOpenThermal, settings = {} }) {
   if (!order) return null;
 
   const handlePrint = () => {
@@ -25,10 +25,22 @@ export default function PrintDeliverySlip({ order, onClose, settings = {} }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {onOpenThermal && (
+              <button
+                type="button"
+                onClick={() => onOpenThermal(order)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transition-colors"
+                title="Print 58mm / 80mm Thermal Receipt"
+              >
+                <Receipt className="w-4 h-4 text-amber-400" />
+                <span>Print Thermal Receipt</span>
+              </button>
+            )}
+
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md"
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs sm:text-sm font-bold shadow-md transition-colors"
             >
               <Printer className="w-4 h-4" />
               <span>Print Delivery Slip</span>

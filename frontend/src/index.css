@@ -17,14 +17,41 @@
   line-height: 1.9;
 }
 
-/* Print styles for order slips and purchasing procurement sheets */
+/* Thermal receipt specific font & styling */
+.thermal-receipt-container {
+  font-family: 'Courier New', Courier, monospace, 'Noto Sans Arabic', Tahoma, sans-serif;
+  color: #000000;
+  background-color: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.thermal-receipt-container.urdu-receipt {
+  font-family: 'Noto Sans Arabic', Tahoma, 'Noto Nastaliq Urdu', Arial, sans-serif;
+}
+
+/* Print styles for order slips, purchasing procurement sheets, and thermal receipts */
 @media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   body * {
     visibility: hidden;
   }
+
   .printable-area, .printable-area * {
     visibility: visible;
   }
+
   .printable-area {
     position: absolute;
     left: 0;
@@ -32,9 +59,37 @@
     width: 100%;
     margin: 0;
     padding: 20px;
-    background: white;
-    color: black;
+    background: white !important;
+    color: black !important;
   }
+
+  /* Thermal Receipt Print Area */
+  .thermal-printable-area, .thermal-printable-area * {
+    visibility: visible;
+  }
+
+  .thermal-printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    padding: 2mm 3mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .thermal-printable-58mm {
+    width: 58mm !important;
+    max-width: 58mm !important;
+  }
+
+  .thermal-printable-80mm {
+    width: 80mm !important;
+    max-width: 80mm !important;
+  }
+
   .no-print {
     display: none !important;
   }

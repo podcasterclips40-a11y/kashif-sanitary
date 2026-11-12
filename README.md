@@ -41,6 +41,18 @@ A modern, mobile-friendly, dual-language (English & Urdu with native Right-to-Le
 - **Filter by Status & Date:** Statuses include `New`, `Confirmed`, `Contacted`, `Preparing`, `Completed`, and `Cancelled`.
 - **New Order Arrival Notifications:** Real-time polling with an audible browser chime and visual flashing badge when a new order arrives.
 - **Printable Delivery Slip / Challan:** Open any customer's order and print a clean packing challan for the delivery driver or warehouse packer with one click (`window.print()`).
+- **Thermal Printer Receipts (58 mm & 80 mm POS):** Print compact, ink-free thermal receipts formatted specifically for standard 58 mm and 80 mm point-of-sale thermal printers. Supports English and Urdu (RTL) with paper-width toggles and reprint options.
+
+---
+
+### 🧾 Thermal POS Receipt Printing (58 mm & 80 mm)
+- **Dedicated POS Layout:** Pure high-contrast black-on-white formatting without graphics, shadows, or ink-wasting colors.
+- **58 mm & 80 mm Width Switcher:** One-click toggle in the preview dialog that configures the layout and CSS `@page` dimensions for standard POS roll sizes.
+  - **58 mm (32 columns):** Compact two-line per-item structure (`[Item Description]` on line 1, `[Qty x Rate = Total]` on line 2) to eliminate text truncation or clipping.
+  - **80 mm (48 columns):** Wide tabular layout with item, size/variant, quantity, unit rate, and line total.
+- **Urdu & English Dual Support:** Urdu receipts automatically render with right-to-left (`dir="rtl"`) layout and clean Urdu typography.
+- **Reprint Counter & Controls:** Print immediately or reprint the receipt as many times as needed.
+- **Preserved Existing Workflow:** The full-size Delivery Challan remains untouched; thermal receipts are added as a fast additional option accessible from each order's invoice/slip, order detail view, and order table.
 
 ---
 
@@ -194,6 +206,60 @@ npm run reset-password
 *(Enter the username or email, then type the new password. The script hashes the password with bcrypt and updates the database immediately.)*
 
 Additionally, logged-in admins can update their password anytime inside the Admin Portal under the **Account & Security** tab.
+
+---
+
+## 🧾 Thermal Printer Receipts Guide (58 mm & 80 mm POS)
+
+The website includes a dedicated thermal receipt engine designed for standard 58 mm and 80 mm point-of-sale (POS) thermal receipt printers commonly used in wholesale shops, warehouses, and delivery counters.
+
+### 🖨️ How to Print a Thermal Receipt
+
+1. Log in to the **Admin Portal** (`/admin`).
+2. Go to the **Orders Management** tab.
+3. You can open a thermal receipt in any of these three convenient locations:
+   - Click the **Receipt icon** (`🧾`) on any order row in the orders table.
+   - Or open **View Details** (`👁️`) on an order and click **"Print Thermal Receipt"**.
+   - Or open the regular **Delivery Slip** (`🖨️`) and click the **"Print Thermal Receipt"** button at the top.
+4. In the preview window:
+   - **Choose Paper Width:** Select **`58 mm`** or **`80 mm`**.
+   - **Choose Language:** Select **`English`** or **`اردو`**.
+   - Click **"Print Thermal Receipt"** (or **"Reprint"** to print again).
+5. The native browser print dialog will appear.
+
+---
+
+### ⚙️ Browser Print Dialog Settings (Crucial for Thermal Printers)
+
+To get perfect, crisp receipts without blank margins or cutoffs:
+
+| Setting | Recommended Value | Why |
+| :--- | :--- | :--- |
+| **Destination / Printer** | Select your thermal printer *(e.g. XP-58, POS-80, Epson TM-T20, Xprinter, etc.)* | Sends output to the receipt printer instead of regular office printer |
+| **Paper Size** | **58 mm / 80 mm / Roll Paper** *(defined by your printer driver)* | Matches the physical roll width installed in your printer |
+| **Margins** | **None** *(or Minimum)* | Prevents the browser from adding default 0.5-inch page margins |
+| **Headers and footers** | **Unchecked (Off)** | Prevents the browser from printing URLs, page numbers, or timestamps at the top/bottom |
+| **Scale** | **Default (100%)** | Keeps fonts sharp and correctly scaled |
+
+---
+
+### 📱 Printing from Phones & Tablets (Android / iOS)
+
+Standard browser printing via the system print dialog is the reliable, universal default. Here is how mobile printing works:
+
+#### Android Phones & Tablets:
+- **Wi-Fi / Network Thermal Printers:** When connected to the same Wi-Fi router, Android automatically detects network thermal printers supporting Mopria or IPP via Chrome's print dialog.
+- **Bluetooth / USB Pocket Thermal Printers:** Standard Android browsers cannot send raw ESC/POS commands over Bluetooth directly without an Android print service. To print from Chrome to a Bluetooth POS printer:
+  1. Install a print service app such as **RawBT Print Service** or your printer manufacturer's official Android driver app from the Google Play Store.
+  2. Pair your printer in the app. The app registers a virtual print service in Android's system print spooler.
+  3. When you tap "Print Thermal Receipt" in Chrome, choose the Bluetooth printer from Android's printer list and tap Print!
+
+#### iPhones & iPads:
+- **AirPrint-Enabled Thermal Printers:** Selected directly in Safari's native print dialog without additional software.
+- **Non-AirPrint POS Printers:** Require a network AirPrint print server (such as CUPS/AirPrint on a local PC) or a specialized receipt utility.
+
+> [!NOTE]
+> Web Bluetooth and WebUSB browser APIs require unencrypted experimental flags and vary widely across printer firmware chipsets. Using the operating system print spooler (Windows/Mac printer driver or Android print service) ensures 100% compatibility with any thermal printer model.
 
 ---
 
