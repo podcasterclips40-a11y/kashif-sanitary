@@ -411,11 +411,23 @@ export default function OrdersManager({ settings = {} }) {
                       <div>
                         <div className="font-bold text-slate-900">{it.product_name_en}</div>
                         <div className="text-[11px] text-slate-500 font-urdu">{it.product_name_ur}</div>
-                        {it.variant && (
-                          <span className="inline-block mt-0.5 px-2 py-0.5 rounded bg-brand-50 text-brand-700 font-semibold text-[10px]">
-                            {it.variant}
-                          </span>
-                        )}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {it.variant && (
+                            <span className="inline-block px-2 py-0.5 rounded bg-brand-50 text-brand-700 font-semibold text-[10px] border border-brand-200">
+                              {it.variant}
+                            </span>
+                          )}
+                          {it.color && (
+                            <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px] border border-slate-200">
+                              Color: {it.color}
+                            </span>
+                          )}
+                          {it.sku && (
+                            <span className="inline-block px-2 py-0.5 rounded bg-white text-slate-500 font-mono text-[10px] border border-slate-200">
+                              {it.sku}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="font-mono font-bold text-sm text-slate-900">

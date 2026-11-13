@@ -314,9 +314,9 @@ export default function PrintThermalReceipt({ order, onClose, settings = {} }) {
                         <div className="font-bold text-[10px] leading-tight">
                           {idx + 1}. {itemName}
                         </div>
-                        {item.variant && (
+                        {(item.variant || item.color) && (
                           <div className="text-[9px] font-mono text-black">
-                            [{item.variant}]
+                            [{[item.variant, item.color].filter(Boolean).join(' • ')}]
                           </div>
                         )}
                         <div className="flex justify-between text-[9px] font-mono mt-0.5">
@@ -336,9 +336,9 @@ export default function PrintThermalReceipt({ order, onClose, settings = {} }) {
                             <div className="font-bold text-[10.5px] leading-tight">
                               {idx + 1}. {itemName}
                             </div>
-                            {item.variant && (
-                              <div className="text-[9.5px] font-mono">
-                                Size: {item.variant}
+                            {(item.variant || item.color) && (
+                              <div className="text-[9.5px] font-mono text-black">
+                                {[item.variant ? (isUrdu ? `سائز: ${item.variant}` : `Size: ${item.variant}`) : null, item.color ? (isUrdu ? `رنگ: ${item.color}` : `Color: ${item.color}`) : null].filter(Boolean).join(' | ')}
                               </div>
                             )}
                           </div>

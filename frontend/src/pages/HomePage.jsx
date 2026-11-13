@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import {
@@ -14,6 +14,10 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  Home as HomeIcon,
+  FolderTree,
 } from 'lucide-react';
 
 export default function HomePage({ settings = {}, products = [], categories = [], loading = false }) {
@@ -40,15 +44,87 @@ export default function HomePage({ settings = {}, products = [], categories = []
   const whatsapp = settings.whatsapp || '+92 300 1234567';
   const rawWhatsApp = whatsapp.replace(/[^0-9]/g, '');
 
-  // Filter products by selected category and search term
+  // Separate top-level categories and subcategories
+  const topLevelCategories = useMemo(() => {
+    return categories
+      .filter((c) => !c.parent_id)
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  }, [categories]);
+
+  // Find active category object if not 'all'
+  const activeCategoryObj = useMemo(() => {
+    if (selectedCategory === 'all') return null;
+    return categories.find((c) => String(c.id) === String(selectedCategory) || c.slug === selectedCategory) || null;
+  }, [selectedCategory, categories]);
+
+  // Compute breadcrumb path: [Root, Sublevel 1, Sublevel 2, ...]
+  const breadcrumbTrail = useMemo(() => {
+    if (!activeCategoryObj) return [];
+    const trail = [activeCategoryObj];
+    let curr = activeCategoryObj;
+    while (curr.parent_id) {
+      const parent = categories.find((c) => c.id === curr.parent_id);
+      if (parent) {
+        trail.unshift(parent);
+        curr = parent;
+      } else {
+        break;
+      }
+    }
+    return trail;
+  }, [activeCategoryObj, categories]);
+
+  // Find direct child subcategories for current selection
+  // If selected category has children, show them.
+  // If selected category is a child with no subcategories, show its siblings (sharing same parent).
+  const visibleSubcategories = useMemo(() => {
+    if (!activeCategoryObj) return [];
+
+    // Direct children
+    const directChildren = categories
+      .filter((c) => c.parent_id === activeCategoryObj.id)
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+
+    if (directChildren.length > 0) {
+      return directChildren;
+    }
+
+    // If it has no children, but has a parent, show siblings
+    if (activeCategoryObj.parent_id) {
+      return categories
+        .filter((c) => c.parent_id === activeCategoryObj.parent_id)
+        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    }
+
+    return [];
+  }, [activeCategoryObj, categories]);
+
+  // Helper to recursively collect category ID + all descendant IDs
+  const activeDescendantIds = useMemo(() => {
+    if (selectedCategory === 'all' || !activeCategoryObj) return null;
+    const ids = new Set([activeCategoryObj.id]);
+    const queue = [activeCategoryObj.id];
+
+    while (queue.length > 0) {
+      const parentId = queue.shift();
+      categories.forEach((c) => {
+        if (c.parent_id === parentId && !ids.has(c.id)) {
+          ids.add(c.id);
+          queue.push(c.id);
+        }
+      });
+    }
+    return ids;
+  }, [selectedCategory, activeCategoryObj, categories]);
+
+  // Filter products by selected category (recursive) and search term
   const filteredProducts = products.filter((p) => {
-    // Category match
+    // Category match: either 'all' or matches active category / descendants
     const categoryMatch =
       selectedCategory === 'all' ||
-      String(p.category_id) === String(selectedCategory) ||
-      p.category_slug === selectedCategory;
+      (activeDescendantIds && activeDescendantIds.has(Number(p.category_id)));
 
-    // Search match in EN, UR, or SKU
+    // Search match in EN, UR, SKU, or variants
     const searchMatch =
       !searchTerm.trim() ||
       p.name_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -61,6 +137,7 @@ export default function HomePage({ settings = {}, products = [], categories = []
   });
 
   const ArrowIcon = isRtl ? ArrowLeft : ArrowRight;
+  const BreadcrumbChevron = isRtl ? ChevronLeft : ChevronRight;
 
   return (
     <div className="space-y-16 sm:space-y-24">
@@ -182,8 +259,42 @@ export default function HomePage({ settings = {}, products = [], categories = []
             </div>
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {/* Breadcrumb Navigation (when a category/subcategory is chosen) */}
+          {breadcrumbTrail.length > 0 && (
+            <nav className="flex items-center flex-wrap gap-1.5 py-2 px-3.5 bg-slate-100/80 rounded-xl border border-slate-200/80 text-xs font-medium text-slate-600">
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className="inline-flex items-center gap-1 text-slate-500 hover:text-brand-600 transition-colors"
+              >
+                <HomeIcon className="w-3.5 h-3.5" />
+                <span>{t('breadcrumbHome')}</span>
+              </button>
+
+              {breadcrumbTrail.map((crumb, idx) => {
+                const isLast = idx === breadcrumbTrail.length - 1;
+                const crumbName = lang === 'ur' ? crumb.name_ur : crumb.name_en;
+
+                return (
+                  <React.Fragment key={crumb.id}>
+                    <BreadcrumbChevron className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    {isLast ? (
+                      <span className="font-bold text-brand-700">{crumbName}</span>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedCategory(crumb.id)}
+                        className="hover:text-brand-600 transition-colors"
+                      >
+                        {crumbName}
+                      </button>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* Primary Top-Level Category Navigation Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setSelectedCategory('all')}
               className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
@@ -195,15 +306,20 @@ export default function HomePage({ settings = {}, products = [], categories = []
               {t('allCategories')}
             </button>
 
-            {categories.map((cat) => {
+            {topLevelCategories.map((cat) => {
               const catName = lang === 'ur' ? cat.name_ur : cat.name_en;
-              const isSelected = String(selectedCategory) === String(cat.id) || selectedCategory === cat.slug;
+              // Is active if directly selected OR if current breadcrumb starts with this category
+              const isActive =
+                String(selectedCategory) === String(cat.id) ||
+                selectedCategory === cat.slug ||
+                (breadcrumbTrail.length > 0 && breadcrumbTrail[0].id === cat.id);
+
               return (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
-                    isSelected
+                    isActive
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                   }`}
@@ -213,6 +329,53 @@ export default function HomePage({ settings = {}, products = [], categories = []
               );
             })}
           </div>
+
+          {/* Secondary Nested Subcategory Filter Pills (If current category has subcategories) */}
+          {visibleSubcategories.length > 0 && (
+            <div className="p-3 bg-brand-50/50 rounded-2xl border border-brand-100 flex items-center gap-2 overflow-x-auto scrollbar-none">
+              <span className="text-xs font-bold text-brand-900 whitespace-nowrap ps-1 flex items-center gap-1">
+                <FolderTree className="w-3.5 h-3.5" />
+                <span>{t('subcategories')}:</span>
+              </span>
+
+              {/* Pill to view all items under the parent */}
+              {breadcrumbTrail.length > 0 && (
+                <button
+                  onClick={() => {
+                    // Jump to parent of visible subcategories
+                    const parentNode = visibleSubcategories[0].parent_id;
+                    if (parentNode) setSelectedCategory(parentNode);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                    activeCategoryObj && visibleSubcategories.some((s) => s.id === activeCategoryObj.id) === false
+                      ? 'bg-brand-700 text-white shadow-sm'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {lang === 'ur' ? 'تمام ذیلی اقسام' : 'All in this section'}
+                </button>
+              )}
+
+              {visibleSubcategories.map((sub) => {
+                const subName = lang === 'ur' ? sub.name_ur : sub.name_en;
+                const isSelected = String(selectedCategory) === String(sub.id) || selectedCategory === sub.slug;
+
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => setSelectedCategory(sub.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                      isSelected
+                        ? 'bg-brand-700 text-white shadow-sm'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {subName}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Product Grid */}
           {loading ? (
@@ -260,75 +423,25 @@ export default function HomePage({ settings = {}, products = [], categories = []
             </span>
             <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               {lang === 'ur'
-                ? 'پلمبرز، ٹھیکیداروں اور سینیٹری دکانداروں کے لیے خصوصی ہول سیل نرخ'
-                : 'Bulk Quotations & Customized Project Orders'}
+                ? 'پروجیکٹس اور ہول سیل سپلائی کے لیے خصوصی رعایت'
+                : 'Bulk Construction & Wholesale Sanitary Procurement'}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               {lang === 'ur'
-                ? 'اگر آپ کو اپنے پروجیکٹ یا دکان کے لیے خصوصی سائز کے پائپ، فٹنگز یا سینیٹری سامان کی بڑی تعداد درکار ہے تو براہ راست ہم سے رابطہ کریں۔'
-                : 'Need specialized PPRC sizes, uPVC bulk pipe bundles, or luxury sanitary ware containers? Contact our wholesale desk for fast cargo quotes.'}
+                ? 'اگر آپ پلازہ، ہاؤسنگ سوسائٹی یا ریٹیل دکان کے لیے بلک کوانٹٹی میں پائپ، فٹنگز یا سینیٹری سامان خریدنا چاہتے ہیں تو ہم سے براہ راست ہول سیل ریٹس حاصل کریں۔'
+                : 'Contractors, retail stores, and commercial builders: contact our wholesale desk for special volume pricing, project schedules, and direct factory freight.'}
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
-            <a
-              href={`https://wa.me/${rawWhatsApp}?text=${encodeURIComponent('Assalam-o-Alaikum, I want to discuss a bulk project order with Kashif Sanitary Supplies.')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>{t('chatWhatsApp')}</span>
-            </a>
-
-            <a
-              href={`tel:${settings.phone ? settings.phone.replace(/[^0-9+]/g, '') : '+923001234567'}`}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 flex items-center justify-center gap-2"
-            >
-              <PhoneCall className="w-4 h-4" />
-              <span>{t('callNow')}</span>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* About Section */}
-      <section id="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 shadow-sm">
-          <div className="max-w-3xl space-y-4">
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              {t('aboutTitle')}
-            </h3>
-            <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-              {t('aboutDesc')}
-            </p>
-
-            <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <CheckCircle2 className="w-5 h-5 text-brand-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    {lang === 'ur' ? 'گارنٹیڈ پائپ اور فٹنگز' : 'Pressure-Tested Pipes'}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {lang === 'ur' ? 'گرم اور ٹھنڈے پانی کے لیے بغیر لیکج آزمودہ سامان۔' : 'Certified PN25 hot & cold potable water ratings.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    {lang === 'ur' ? 'شفاف آرڈرز اور پرچیزنگ' : 'Reliable Supply Chain'}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {lang === 'ur' ? 'ہر گاہک کے سامان کی علیحدہ پیکنگ اور فوری ڈسپیچ۔' : 'Clear packing challans, organized procurement, and verified delivery.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <a
+            href={`https://wa.me/${rawWhatsApp}?text=${encodeURIComponent('Hello Kashif Sanitary Supplies, I need bulk project wholesale quote.')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-3.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs sm:text-sm shrink-0 shadow-lg flex items-center gap-2 transition-all active:scale-95"
+          >
+            <MessageCircle className="w-4 h-4 text-emerald-600" />
+            <span>{t('chatWhatsApp')}</span>
+          </a>
         </div>
       </section>
     </div>

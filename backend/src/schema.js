@@ -90,6 +90,8 @@ export async function initSchema() {
       product_name_en TEXT NOT NULL,
       product_name_ur TEXT NOT NULL,
       variant TEXT DEFAULT '',
+      color TEXT DEFAULT '',
+      sku TEXT DEFAULT '',
       unit TEXT DEFAULT 'Piece',
       quantity INTEGER NOT NULL,
       unit_price REAL DEFAULT 0,
@@ -97,6 +99,35 @@ export async function initSchema() {
       line_total REAL DEFAULT 0
     );
   `);
+
+  // Safe migrations for nested categories and product variants (preserves all existing data)
+  try {
+    await query(`ALTER TABLE categories ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL`);
+    console.log('[DB Migration] Added parent_id column to categories');
+  } catch (e) {
+    // Column already exists
+  }
+
+  try {
+    await query(`ALTER TABLE products ADD COLUMN track_stock INTEGER DEFAULT 0`);
+    console.log('[DB Migration] Added track_stock column to products');
+  } catch (e) {
+    // Column already exists
+  }
+
+  try {
+    await query(`ALTER TABLE order_items ADD COLUMN color TEXT DEFAULT ''`);
+    console.log('[DB Migration] Added color column to order_items');
+  } catch (e) {
+    // Column already exists
+  }
+
+  try {
+    await query(`ALTER TABLE order_items ADD COLUMN sku TEXT DEFAULT ''`);
+    console.log('[DB Migration] Added sku column to order_items');
+  } catch (e) {
+    // Column already exists
+  }
 
   console.log('[DB] Schema initialized successfully.');
 }

@@ -1,39 +1,158 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
-import { ShoppingCart, Check, Plus, Minus, Tag, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Check, Plus, Minus, Tag, AlertCircle, Palette } from 'lucide-react';
 
 export default function ProductCard({ product }) {
   const { lang, t } = useLanguage();
   const { addToCart } = useCart();
 
-  const [selectedVariant, setSelectedVariant] = useState(() => {
-    return product.variants && product.variants.length > 0 ? product.variants[0] : '';
+  // Normalize variants list to rich objects
+  const normalizedVariants = useMemo(() => {
+    if (!product.variants || !Array.isArray(product.variants) || product.variants.length === 0) {
+      return [];
+    }
+    return product.variants.map((v, i) => {
+      if (typeof v === 'string') {
+        return {
+          id: `var-${i}`,
+          name: v,
+          color: '',
+          color_code: '',
+          size: v,
+          sku: product.sku || '',
+          price: product.price || 0,
+          is_price_on_request: product.is_price_on_request ? 1 : 0,
+          stock_quantity: 0,
+          image_url: '',
+          is_available: product.is_available ?? 1,
+        };
+      }
+      return {
+        id: v.id || `var-${i}`,
+        name: v.name || [v.size, v.color].filter(Boolean).join(' - ') || `Option ${i + 1}`,
+        color: v.color || '',
+        color_code: v.color_code || '',
+        size: v.size || '',
+        sku: v.sku || product.sku || '',
+        price: v.price !== undefined ? v.price : product.price,
+        is_price_on_request: v.is_price_on_request !== undefined ? (v.is_price_on_request ? 1 : 0) : (product.is_price_on_request ? 1 : 0),
+        stock_quantity: v.stock_quantity || 0,
+        image_url: v.image_url || '',
+        is_available: v.is_available ?? (product.is_available ?? 1),
+      };
+    });
+  }, [product.variants, product.price, product.is_price_on_request, product.is_available, product.sku]);
+
+  // Extract unique colors if present
+  const availableColors = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    normalizedVariants.forEach((v) => {
+      if (v.color && !seen.has(v.color.toLowerCase())) {
+        seen.add(v.color.toLowerCase());
+        list.push({
+          name: v.color,
+          code: v.color_code || '#cccccc',
+        });
+      }
+    });
+    return list;
+  }, [normalizedVariants]);
+
+  // Selected variant state
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [selectedColor, setSelectedColor] = useState(() => {
+    return availableColors.length > 0 ? availableColors[0].name : '';
   });
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  const productName = lang === 'ur' ? (product.name_ur || product.name_en) : (product.name_en || product.name_ur);
+  // Active variant object
+  const activeVariant = normalizedVariants[selectedIdx] || null;
+
+  // Filter variants by chosen color if color selection is active
+  const filteredVariantsByColor = useMemo(() => {
+    if (!selectedColor) return normalizedVariants;
+    const matched = normalizedVariants.filter(
+      (v) => v.color && v.color.toLowerCase() === selectedColor.toLowerCase()
+    );
+    return matched.length > 0 ? matched : normalizedVariants;
+  }, [normalizedVariants, selectedColor]);
+
+  // Handle color change: auto switch to first variant of this color
+  const handleColorSelect = (colorName) => {
+    setSelectedColor(colorName);
+    const targetIdx = normalizedVariants.findIndex(
+      (v) => v.color && v.color.toLowerCase() === colorName.toLowerCase()
+    );
+    if (targetIdx > -1) {
+      setSelectedIdx(targetIdx);
+    }
+  };
+
+  const handleVariantChange = (idx) => {
+    setSelectedIdx(idx);
+    const v = normalizedVariants[idx];
+    if (v && v.color) {
+      setSelectedColor(v.color);
+    }
+  };
+
+  const productName =
+    lang === 'ur' ? (product.name_ur || product.name_en) : (product.name_en || product.name_ur);
   const secondaryName = lang === 'ur' ? product.name_en : product.name_ur;
-  const description = lang === 'ur' ? (product.description_ur || product.description_en) : (product.description_en || product.description_ur);
-  const categoryName = lang === 'ur' ? (product.category_name_ur || product.category_name_en) : (product.category_name_en || product.category_name_ur);
+  const description =
+    lang === 'ur'
+      ? (product.description_ur || product.description_en)
+      : (product.description_en || product.description_ur);
+  const categoryName =
+    lang === 'ur'
+      ? (product.category_name_ur || product.category_name_en)
+      : (product.category_name_en || product.category_name_ur);
+
+  // Active display image: variant image first, then product image, then fallback
+  const fallbackImage =
+    'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80';
+  const displayImage =
+    activeVariant?.image_url || product.image_url || fallbackImage;
+
+  // Active pricing
+  const isPriceOnRequest = activeVariant
+    ? activeVariant.is_price_on_request === 1
+    : product.is_price_on_request === 1;
+  const displayPrice = activeVariant ? activeVariant.price : product.price;
+
+  // Active availability
+  const activeAvailability = activeVariant?.is_available ?? product.is_available ?? 1;
 
   const handleAdd = () => {
-    addToCart(product, selectedVariant, quantity);
+    const variantLabel = activeVariant ? activeVariant.name : '';
+    const colorLabel = activeVariant?.color || selectedColor || '';
+    const sku = activeVariant?.sku || product.sku || '';
+
+    addToCart(product, variantLabel, quantity, {
+      color: colorLabel,
+      sku: sku,
+      price: displayPrice,
+      is_price_on_request: isPriceOnRequest ? 1 : 0,
+      image_url: displayImage,
+    });
+
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);
   };
 
   const getStockBadge = () => {
-    if (product.is_available === 1) {
+    if (activeAvailability === 1) {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 me-1.5"></span>
           {t('inStock')}
         </span>
       );
-    } else if (product.is_available === 2) {
+    } else if (activeAvailability === 2) {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 me-1.5"></span>
@@ -50,14 +169,12 @@ export default function ProductCard({ product }) {
     }
   };
 
-  const fallbackImage = 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80';
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200 hover:border-brand-400 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden group">
       {/* Product Image Area */}
       <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
         <img
-          src={imgError || !product.image_url ? fallbackImage : product.image_url}
+          src={imgError ? fallbackImage : displayImage}
           alt={productName}
           onError={() => setImgError(true)}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -74,10 +191,11 @@ export default function ProductCard({ product }) {
           {getStockBadge()}
         </div>
 
-        {product.sku && (
+        {/* SKU Badge */}
+        {(activeVariant?.sku || product.sku) && (
           <div className="absolute bottom-2 start-3">
             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/90 text-slate-700 shadow-sm">
-              {product.sku}
+              {activeVariant?.sku || product.sku}
             </span>
           </div>
         )}
@@ -103,23 +221,64 @@ export default function ProductCard({ product }) {
         </div>
 
         <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
-          {/* Variant Selector */}
-          {product.variants && product.variants.length > 0 && (
+          {/* Color Swatches (if multiple colors defined) */}
+          {availableColors.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 mb-1.5">
+                <span>{t('selectColor')}</span>
+                <span className="text-slate-800 font-bold capitalize">{selectedColor}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {availableColors.map((c) => {
+                  const isChosen = selectedColor.toLowerCase() === c.name.toLowerCase();
+                  return (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onClick={() => handleColorSelect(c.name)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                        isChosen
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-brand-500/30'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title={c.name}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-black/20 shrink-0"
+                        style={{ backgroundColor: c.code }}
+                      />
+                      <span>{c.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Variant Selector Dropdown */}
+          {normalizedVariants.length > 0 && (
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
                 {t('selectVariant')}
               </label>
               <select
-                value={selectedVariant}
-                onChange={(e) => setSelectedVariant(e.target.value)}
+                value={selectedIdx}
+                onChange={(e) => handleVariantChange(Number(e.target.value))}
                 className="w-full text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-slate-800"
               >
-                {product.variants.map((v, i) => (
-                  <option key={i} value={v}>
-                    {v}
+                {normalizedVariants.map((v, i) => (
+                  <option key={i} value={i}>
+                    {v.name} {v.size && v.size !== v.name ? `(${v.size})` : ''} {v.color ? `• ${v.color}` : ''}
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Stock inventory note if tracking enabled */}
+          {product.track_stock === 1 && activeVariant && activeVariant.stock_quantity > 0 && (
+            <div className="text-[11px] text-emerald-700 font-medium">
+              ✓ {activeVariant.stock_quantity} {product.unit || 'pcs'} {t('inStockCount')}
             </div>
           )}
 
@@ -129,7 +288,7 @@ export default function ProductCard({ product }) {
               <span className="text-[11px] text-slate-400 block font-medium">
                 {product.unit ? `${t('unit')}: ${product.unit}` : ''}
               </span>
-              {product.is_price_on_request || !product.price || product.price === 0 ? (
+              {isPriceOnRequest || !displayPrice || displayPrice === 0 ? (
                 <div className="inline-flex items-center gap-1 text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-200">
                   <Tag className="w-3 h-3" />
                   <span>{t('requestPrice')}</span>
@@ -137,7 +296,7 @@ export default function ProductCard({ product }) {
               ) : (
                 <div className="text-lg font-extrabold text-slate-900 font-mono">
                   <span className="text-xs font-normal text-slate-500 me-1">PKR</span>
-                  {Number(product.price).toLocaleString()}
+                  {Number(displayPrice).toLocaleString()}
                 </div>
               )}
             </div>
@@ -169,10 +328,10 @@ export default function ProductCard({ product }) {
           {/* Add to Order Button */}
           <button
             type="button"
-            disabled={product.is_available === 0}
+            disabled={activeAvailability === 0}
             onClick={handleAdd}
             className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98 ${
-              product.is_available === 0
+              activeAvailability === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                 : added
                 ? 'bg-emerald-600 text-white shadow-emerald-600/30'

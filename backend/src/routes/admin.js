@@ -1,6 +1,7 @@
 import express from 'express';
 import { query, db } from '../db.js';
 import { requireAdmin } from '../auth.js';
+import { normalizeVariants } from './public.js';
 
 const router = express.Router();
 
@@ -108,7 +109,7 @@ router.get('/orders/:id', async (req, res) => {
 
     const order = orderRes.rows[0];
     const itemsRes = await query(
-      `SELECT oi.*, p.image_url, p.sku
+      `SELECT oi.*, p.image_url, COALESCE(NULLIF(oi.sku, ''), p.sku) as sku
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = ?
@@ -182,20 +183,16 @@ router.delete('/orders/:id', async (req, res) => {
 /**
  * GET /api/admin/purchasing-summary
  * Product-Wise Purchasing Summary across selected orders
- * Query params:
- *   - order_ids: comma separated ids e.g. "1,2,5"
- *   - statuses: comma separated statuses e.g. "New,Confirmed,Preparing"
- *   - date_from, date_to
+ * Grouped separately by Product, Variant (size/model), Color, and Unit!
  */
 router.get('/purchasing-summary', async (req, res) => {
   try {
     const { order_ids, statuses, date_from, date_to } = req.query;
 
-    // 1. First fetch eligible active orders list so the admin can toggle them
+    // 1. Fetch eligible active orders list so admin can toggle
     let ordersSql = `SELECT id, order_number, customer_name, shop_name, phone, status, total_items, created_at FROM orders WHERE 1=1`;
     const ordersParams = [];
 
-    // Exclude cancelled by default unless explicitly asked
     if (statuses) {
       const statusList = statuses.split(',').map((s) => s.trim()).filter(Boolean);
       if (statusList.length > 0) {
@@ -219,7 +216,6 @@ router.get('/purchasing-summary', async (req, res) => {
     const availableOrdersRes = await query(ordersSql, ordersParams);
     const availableOrders = availableOrdersRes.rows;
 
-    // Determine target order IDs to include in calculation
     let targetOrderIds = [];
     if (order_ids) {
       targetOrderIds = order_ids
@@ -227,7 +223,6 @@ router.get('/purchasing-summary', async (req, res) => {
         .map((id) => parseInt(id.trim(), 10))
         .filter((id) => !isNaN(id));
     } else {
-      // Default: include all eligible non-cancelled orders from the filtered list
       targetOrderIds = availableOrders.map((o) => o.id);
     }
 
@@ -242,18 +237,19 @@ router.get('/purchasing-summary', async (req, res) => {
       });
     }
 
-    // 2. Aggregate line items across targeted orders
+    // 2. Aggregate line items across targeted orders, separating by product, variant, and color
     const placeholders = targetOrderIds.map(() => '?').join(',');
     const summarySql = `
       SELECT 
         oi.product_name_en,
         oi.product_name_ur,
         COALESCE(oi.variant, '') as variant,
+        COALESCE(oi.color, '') as color,
         COALESCE(oi.unit, 'Piece') as unit,
         SUM(oi.quantity) as total_quantity,
         COUNT(DISTINCT o.id) as total_orders_count,
         MAX(p.image_url) as image_url,
-        MAX(p.sku) as sku,
+        MAX(COALESCE(NULLIF(oi.sku, ''), p.sku)) as sku,
         MAX(c.name_en) as category_name_en,
         MAX(c.name_ur) as category_name_ur
       FROM order_items oi
@@ -261,8 +257,8 @@ router.get('/purchasing-summary', async (req, res) => {
       LEFT JOIN products p ON oi.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE o.id IN (${placeholders})
-      GROUP BY oi.product_name_en, oi.product_name_ur, COALESCE(oi.variant, ''), COALESCE(oi.unit, 'Piece')
-      ORDER BY category_name_en ASC, oi.product_name_en ASC, oi.variant ASC
+      GROUP BY oi.product_name_en, oi.product_name_ur, COALESCE(oi.variant, ''), COALESCE(oi.color, ''), COALESCE(oi.unit, 'Piece')
+      ORDER BY category_name_en ASC, oi.product_name_en ASC, oi.variant ASC, oi.color ASC
     `;
 
     const summaryRes = await query(summarySql, targetOrderIds);
@@ -272,6 +268,7 @@ router.get('/purchasing-summary', async (req, res) => {
       SELECT 
         oi.product_name_en,
         COALESCE(oi.variant, '') as variant,
+        COALESCE(oi.color, '') as color,
         COALESCE(oi.unit, 'Piece') as unit,
         o.order_number,
         COALESCE(NULLIF(o.shop_name, ''), o.customer_name) as client_name,
@@ -280,14 +277,13 @@ router.get('/purchasing-summary', async (req, res) => {
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       WHERE o.id IN (${placeholders})
-      ORDER BY oi.product_name_en ASC, oi.variant ASC, o.created_at ASC
+      ORDER BY oi.product_name_en ASC, oi.variant ASC, oi.color ASC, o.created_at ASC
     `;
     const breakdownRes = await query(breakdownSql, targetOrderIds);
 
-    // Group breakdowns by product_name_en + '||' + variant + '||' + unit
     const breakdownMap = {};
     for (const b of breakdownRes.rows) {
-      const key = `${b.product_name_en}||${b.variant}||${b.unit}`;
+      const key = `${b.product_name_en}||${b.variant}||${b.color}||${b.unit}`;
       if (!breakdownMap[key]) {
         breakdownMap[key] = [];
       }
@@ -301,7 +297,7 @@ router.get('/purchasing-summary', async (req, res) => {
 
     let grandTotalQty = 0;
     const summary = summaryRes.rows.map((row) => {
-      const key = `${row.product_name_en}||${row.variant}||${row.unit}`;
+      const key = `${row.product_name_en}||${row.variant}||${row.color}||${row.unit}`;
       grandTotalQty += Number(row.total_quantity);
       return {
         ...row,
@@ -330,19 +326,14 @@ router.get('/purchasing-summary', async (req, res) => {
 router.get('/products', async (req, res) => {
   try {
     const result = await query(
-      `SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur
+      `SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur, c.parent_id as category_parent_id
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        ORDER BY p.id DESC`
     );
 
     const products = result.rows.map((row) => {
-      let variants = [];
-      try {
-        variants = row.variants_json ? JSON.parse(row.variants_json) : [];
-      } catch (e) {
-        variants = [];
-      }
+      const variants = normalizeVariants(row.variants_json, row.price, row.is_available, row.image_url);
       return { ...row, variants };
     });
 
@@ -367,6 +358,7 @@ router.post('/products', async (req, res) => {
       is_price_on_request = 0,
       unit = 'Piece',
       variants = [],
+      track_stock = 0,
       is_available = 1,
       is_featured = 0,
     } = req.body;
@@ -380,9 +372,9 @@ router.post('/products', async (req, res) => {
     const result = await query(
       `INSERT INTO products (
         category_id, sku, name_en, name_ur, description_en, description_ur,
-        image_url, price, is_price_on_request, unit, variants_json, is_available, is_featured,
+        image_url, price, is_price_on_request, unit, variants_json, track_stock, is_available, is_featured,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       RETURNING *`,
       [
         category_id || null,
@@ -396,6 +388,7 @@ router.post('/products', async (req, res) => {
         is_price_on_request ? 1 : 0,
         unit,
         variantsJson,
+        track_stock ? 1 : 0,
         is_available ? 1 : 0,
         is_featured ? 1 : 0,
       ]
@@ -422,6 +415,7 @@ router.put('/products/:id', async (req, res) => {
       is_price_on_request = 0,
       unit = 'Piece',
       variants = [],
+      track_stock = 0,
       is_available = 1,
       is_featured = 0,
     } = req.body;
@@ -445,6 +439,7 @@ router.put('/products/:id', async (req, res) => {
         is_price_on_request = ?,
         unit = ?,
         variants_json = ?,
+        track_stock = ?,
         is_available = ?,
         is_featured = ?,
         updated_at = datetime('now')
@@ -461,6 +456,7 @@ router.put('/products/:id', async (req, res) => {
         is_price_on_request ? 1 : 0,
         unit,
         variantsJson,
+        track_stock ? 1 : 0,
         is_available ? 1 : 0,
         is_featured ? 1 : 0,
         req.params.id,
@@ -485,14 +481,19 @@ router.delete('/products/:id', async (req, res) => {
 });
 
 /**
- * CATEGORIES CRUD
+ * CATEGORIES CRUD (Nested / Hierarchical)
  */
 router.get('/categories', async (req, res) => {
   try {
     const result = await query(
-      `SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id) as product_count
+      `SELECT c.*,
+              (SELECT COUNT(*) FROM products WHERE category_id = c.id) as product_count,
+              (SELECT COUNT(*) FROM categories WHERE parent_id = c.id) as subcategory_count,
+              p.name_en as parent_name_en,
+              p.name_ur as parent_name_ur
        FROM categories c
-       ORDER BY display_order ASC, name_en ASC`
+       LEFT JOIN categories p ON c.parent_id = p.id
+       ORDER BY COALESCE(c.parent_id, 0) ASC, c.display_order ASC, c.name_en ASC`
     );
     return res.json({ success: true, categories: result.rows });
   } catch (error) {
@@ -503,19 +504,29 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { slug, name_en, name_ur, description_en = '', description_ur = '', icon = 'Layers', display_order = 0 } = req.body;
+    const {
+      parent_id = null,
+      slug,
+      name_en,
+      name_ur,
+      description_en = '',
+      description_ur = '',
+      icon = 'Layers',
+      display_order = 0
+    } = req.body;
 
     if (!name_en || !name_ur) {
       return res.status(400).json({ success: false, error: 'Category name in English and Urdu is required' });
     }
 
     const safeSlug = (slug || name_en).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const parentIdVal = parent_id ? Number(parent_id) : null;
 
     const result = await query(
-      `INSERT INTO categories (slug, name_en, name_ur, description_en, description_ur, icon, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO categories (parent_id, slug, name_en, name_ur, description_en, description_ur, icon, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
-      [safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0]
+      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0]
     );
 
     return res.status(201).json({ success: true, category: result.rows[0] });
@@ -527,16 +538,34 @@ router.post('/categories', async (req, res) => {
 
 router.put('/categories/:id', async (req, res) => {
   try {
-    const { slug, name_en, name_ur, description_en = '', description_ur = '', icon = 'Layers', display_order = 0, is_active = 1 } = req.body;
+    const {
+      parent_id = null,
+      slug,
+      name_en,
+      name_ur,
+      description_en = '',
+      description_ur = '',
+      icon = 'Layers',
+      display_order = 0,
+      is_active = 1
+    } = req.body;
 
     if (!name_en || !name_ur) {
       return res.status(400).json({ success: false, error: 'Category name in English and Urdu is required' });
+    }
+
+    const catId = Number(req.params.id);
+    const parentIdVal = parent_id ? Number(parent_id) : null;
+
+    if (parentIdVal && parentIdVal === catId) {
+      return res.status(400).json({ success: false, error: 'A category cannot be its own parent' });
     }
 
     const safeSlug = (slug || name_en).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
     await query(
       `UPDATE categories SET
+        parent_id = ?,
         slug = ?,
         name_en = ?,
         name_ur = ?,
@@ -546,7 +575,7 @@ router.put('/categories/:id', async (req, res) => {
         display_order = ?,
         is_active = ?
        WHERE id = ?`,
-      [safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0, is_active ? 1 : 0, req.params.id]
+      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0, is_active ? 1 : 0, catId]
     );
 
     return res.json({ success: true, message: 'Category updated successfully' });
@@ -556,9 +585,80 @@ router.put('/categories/:id', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/categories/:id/usage
+ * Inspect products and subcategories contained before deletion
+ */
+router.get('/categories/:id/usage', async (req, res) => {
+  try {
+    const catId = Number(req.params.id);
+    const catRes = await query('SELECT * FROM categories WHERE id = ?', [catId]);
+    if (catRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Category not found' });
+    }
+
+    const prodsRes = await query('SELECT id, name_en, name_ur, sku FROM products WHERE category_id = ?', [catId]);
+    const subsRes = await query('SELECT id, name_en, name_ur, slug FROM categories WHERE parent_id = ?', [catId]);
+
+    // Categories to reassign to (excluding this category and its children)
+    const othersRes = await query(
+      'SELECT id, name_en, name_ur FROM categories WHERE id != ? AND (parent_id IS NULL OR parent_id != ?)',
+      [catId, catId]
+    );
+
+    return res.json({
+      success: true,
+      category: catRes.rows[0],
+      product_count: prodsRes.rows.length,
+      products: prodsRes.rows,
+      subcategory_count: subsRes.rows.length,
+      subcategories: subsRes.rows,
+      other_categories: othersRes.rows,
+    });
+  } catch (error) {
+    console.error('[Category Usage Error]:', error);
+    return res.status(500).json({ success: false, error: 'Failed to inspect category' });
+  }
+});
+
+/**
+ * DELETE /api/admin/categories/:id
+ * Supports reassign or detach action to protect existing products and subcategories
+ */
 router.delete('/categories/:id', async (req, res) => {
   try {
-    await query('DELETE FROM categories WHERE id = ?', [req.params.id]);
+    const catId = Number(req.params.id);
+    const { action, reassign_category_id } = req.body || {};
+
+    const prodsCountRes = await query('SELECT COUNT(*) as count FROM products WHERE category_id = ?', [catId]);
+    const subsCountRes = await query('SELECT COUNT(*) as count FROM categories WHERE parent_id = ?', [catId]);
+    const prodCount = prodsCountRes.rows[0].count;
+    const subCount = subsCountRes.rows[0].count;
+
+    // Safety check: if category contains products or subcategories and no resolution action was specified
+    if ((prodCount > 0 || subCount > 0) && !action) {
+      return res.status(409).json({
+        success: false,
+        requires_action: true,
+        product_count: prodCount,
+        subcategory_count: subCount,
+        message: `This category contains ${prodCount} products and ${subCount} subcategories. Please choose whether to reassign them or detach them before deleting.`,
+      });
+    }
+
+    if (action === 'reassign' && reassign_category_id) {
+      const targetId = Number(reassign_category_id);
+      // Reassign products to target category
+      await query('UPDATE products SET category_id = ? WHERE category_id = ?', [targetId, catId]);
+      // Reassign child categories to target category
+      await query('UPDATE categories SET parent_id = ? WHERE parent_id = ?', [targetId, catId]);
+    } else if (action === 'detach' || action === 'force') {
+      // Detach: remove category assignment from products and subcategories
+      await query('UPDATE products SET category_id = NULL WHERE category_id = ?', [catId]);
+      await query('UPDATE categories SET parent_id = NULL WHERE parent_id = ?', [catId]);
+    }
+
+    await query('DELETE FROM categories WHERE id = ?', [catId]);
     return res.json({ success: true, message: 'Category deleted successfully' });
   } catch (error) {
     console.error('[Delete Category Error]:', error);
@@ -585,7 +685,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const settings = req.body; // Key-value object
+    const settings = req.body;
     if (!settings || typeof settings !== 'object') {
       return res.status(400).json({ success: false, error: 'Invalid settings payload' });
     }

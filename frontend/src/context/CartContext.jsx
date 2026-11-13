@@ -19,11 +19,20 @@ export function CartProvider({ children }) {
     localStorage.setItem('kss_cart', JSON.stringify(items));
   }, [items]);
 
-  const addToCart = (product, selectedVariant, quantity = 1) => {
+  const addToCart = (product, selectedVariant = '', quantity = 1, options = {}) => {
+    const color = options.color || '';
+    const sku = options.sku || product.sku || '';
+    const unitPrice = options.price !== undefined ? options.price : (product.price || 0);
+    const isPriceOnRequest = options.is_price_on_request !== undefined ? options.is_price_on_request : (product.is_price_on_request ? 1 : 0);
+    const imageUrl = options.image_url || product.image_url;
+
     setItems((prevItems) => {
-      // Find existing item matching product ID and variant
+      // Find existing item matching product ID, variant, and color
       const existingIndex = prevItems.findIndex(
-        (it) => it.product_id === product.id && it.variant === selectedVariant
+        (it) =>
+          it.product_id === product.id &&
+          (it.variant || '') === (selectedVariant || '') &&
+          (it.color || '') === (color || '')
       );
 
       if (existingIndex > -1) {
@@ -36,11 +45,13 @@ export function CartProvider({ children }) {
           product_name_en: product.name_en,
           product_name_ur: product.name_ur,
           variant: selectedVariant || '',
+          color: color || '',
+          sku: sku || '',
           unit: product.unit || 'Piece',
           quantity,
-          unit_price: product.price || 0,
-          is_price_on_request: product.is_price_on_request ? 1 : 0,
-          image_url: product.image_url,
+          unit_price: unitPrice,
+          is_price_on_request: isPriceOnRequest ? 1 : 0,
+          image_url: imageUrl,
         };
         return [...prevItems, newItem];
       }

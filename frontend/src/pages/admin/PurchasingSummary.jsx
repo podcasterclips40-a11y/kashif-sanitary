@@ -266,7 +266,7 @@ export default function PurchasingSummary({ settings = {} }) {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {summaryData.map((item, index) => {
-                  const itemKey = `${item.product_name_en}-${item.variant}-${item.unit}`;
+                  const itemKey = `${item.product_name_en}-${item.variant}-${item.color || ''}-${item.unit}`;
                   const isExpanded = expandedItems.has(itemKey);
 
                   return (
@@ -282,16 +282,23 @@ export default function PurchasingSummary({ settings = {} }) {
                           <div className="text-xs text-slate-500 font-urdu mt-0.5">
                             {item.product_name_ur}
                           </div>
-                          {item.variant && (
-                            <span className="inline-block mt-1 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-xs border border-amber-200 font-mono">
-                              Size / Variant: {item.variant}
-                            </span>
-                          )}
-                          {item.category_name_en && (
-                            <span className="inline-block ms-2 text-[10px] text-slate-400 uppercase font-semibold">
-                              ({item.category_name_en})
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            {item.variant && (
+                              <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-xs border border-amber-200 font-mono">
+                                Size / Variant: {item.variant}
+                              </span>
+                            )}
+                            {item.color && (
+                              <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-800 font-bold text-xs border border-slate-300 font-mono">
+                                Color: {item.color}
+                              </span>
+                            )}
+                            {item.category_name_en && (
+                              <span className="inline-block text-[10px] text-slate-400 uppercase font-semibold">
+                                ({item.category_name_en})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3 sm:p-4 text-center font-semibold text-slate-600">
                           {item.unit || 'Piece'}

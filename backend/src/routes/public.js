@@ -11,6 +11,86 @@ function generateOrderNumber() {
 }
 
 /**
+ * Normalizes variants from variants_json so that legacy strings
+ * and new rich variant objects (with color, size, sku, price, image, stock)
+ * work seamlessly and consistently.
+ */
+export function normalizeVariants(variantsJson, defaultPrice = 0, defaultAvailable = 1, defaultImage = '') {
+  if (!variantsJson) return [];
+  let list = [];
+  try {
+    list = typeof variantsJson === 'string' ? JSON.parse(variantsJson) : variantsJson;
+  } catch (e) {
+    list = [];
+  }
+  if (!Array.isArray(list)) return [];
+
+  return list.map((item, index) => {
+    if (typeof item === 'string') {
+      return {
+        id: `v_${index}`,
+        name: item,
+        sku: '',
+        color: '',
+        color_code: '',
+        size: item,
+        material: '',
+        model: '',
+        price: defaultPrice || 0,
+        is_price_on_request: 0,
+        is_available: defaultAvailable ?? 1,
+        stock_quantity: 0,
+        image_url: defaultImage || '',
+      };
+    }
+    return {
+      id: item.id || `v_${index}`,
+      name: item.name || [item.color, item.size, item.model, item.material].filter(Boolean).join(' - ') || 'Standard',
+      sku: item.sku || '',
+      color: item.color || '',
+      color_code: item.color_code || '',
+      size: item.size || '',
+      material: item.material || '',
+      model: item.model || '',
+      price: item.price !== undefined && item.price !== null ? parseFloat(item.price) : (defaultPrice || 0),
+      is_price_on_request: item.is_price_on_request ? 1 : 0,
+      is_available: item.is_available !== undefined ? Number(item.is_available) : (defaultAvailable ?? 1),
+      stock_quantity: parseInt(item.stock_quantity, 10) || 0,
+      image_url: item.image_url || defaultImage || '',
+    };
+  });
+}
+
+/**
+ * Helper to get a category ID and all its recursive descendant IDs
+ */
+async function getCategoryAndDescendantIds(catIdOrSlug) {
+  let targetCat = null;
+  if (!isNaN(catIdOrSlug)) {
+    const res = await query('SELECT id FROM categories WHERE id = ?', [Number(catIdOrSlug)]);
+    if (res.rows.length > 0) targetCat = res.rows[0];
+  } else {
+    const res = await query('SELECT id FROM categories WHERE slug = ?', [catIdOrSlug]);
+    if (res.rows.length > 0) targetCat = res.rows[0];
+  }
+  if (!targetCat) return [];
+
+  const allCats = await query('SELECT id, parent_id FROM categories WHERE is_active = 1');
+  const resultIds = [targetCat.id];
+  let added = true;
+  while (added) {
+    added = false;
+    for (const c of allCats.rows) {
+      if (c.parent_id && resultIds.includes(c.parent_id) && !resultIds.includes(c.id)) {
+        resultIds.push(c.id);
+        added = true;
+      }
+    }
+  }
+  return resultIds;
+}
+
+/**
  * GET /api/public/settings
  * Returns public website settings dictionary
  */
@@ -30,15 +110,17 @@ router.get('/settings', async (req, res) => {
 
 /**
  * GET /api/public/categories
- * Returns active categories
+ * Returns active categories with nested parent_id relationships
  */
 router.get('/categories', async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, slug, name_en, name_ur, description_en, description_ur, icon, display_order
-       FROM categories
-       WHERE is_active = 1
-       ORDER BY display_order ASC, name_en ASC`
+      `SELECT c.id, c.parent_id, c.slug, c.name_en, c.name_ur, c.description_en, c.description_ur, c.icon, c.display_order,
+              p.name_en as parent_name_en, p.name_ur as parent_name_ur
+       FROM categories c
+       LEFT JOIN categories p ON c.parent_id = p.id
+       WHERE c.is_active = 1
+       ORDER BY c.display_order ASC, c.name_en ASC`
     );
     return res.json({ success: true, categories: result.rows });
   } catch (error) {
@@ -56,7 +138,7 @@ router.get('/products', async (req, res) => {
     const { category, search, featured } = req.query;
 
     let sql = `
-      SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur, c.slug as category_slug
+      SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur, c.slug as category_slug, c.parent_id as category_parent_id
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE 1=1
@@ -64,12 +146,13 @@ router.get('/products', async (req, res) => {
     const params = [];
 
     if (category) {
-      if (!isNaN(category)) {
-        sql += ' AND p.category_id = ?';
-        params.push(Number(category));
+      const catIds = await getCategoryAndDescendantIds(category);
+      if (catIds.length > 0) {
+        const placeholders = catIds.map(() => '?').join(',');
+        sql += ` AND p.category_id IN (${placeholders})`;
+        params.push(...catIds);
       } else {
-        sql += ' AND c.slug = ?';
-        params.push(category);
+        sql += ' AND 1 = 0';
       }
     }
 
@@ -79,22 +162,17 @@ router.get('/products', async (req, res) => {
 
     if (search && search.trim() !== '') {
       const term = `%${search.trim()}%`;
-      sql += ' AND (p.name_en LIKE ? OR p.name_ur LIKE ? OR p.description_en LIKE ? OR p.description_ur LIKE ? OR p.sku LIKE ?)';
-      params.push(term, term, term, term, term);
+      sql += ' AND (p.name_en LIKE ? OR p.name_ur LIKE ? OR p.description_en LIKE ? OR p.description_ur LIKE ? OR p.sku LIKE ? OR p.variants_json LIKE ?)';
+      params.push(term, term, term, term, term, term);
     }
 
     sql += ' ORDER BY p.is_featured DESC, p.created_at DESC';
 
     const result = await query(sql, params);
 
-    // Parse variants_json safely
+    // Normalize rich variants array
     const products = result.rows.map((row) => {
-      let variants = [];
-      try {
-        variants = row.variants_json ? JSON.parse(row.variants_json) : [];
-      } catch (e) {
-        variants = [];
-      }
+      const variants = normalizeVariants(row.variants_json, row.price, row.is_available, row.image_url);
       return {
         ...row,
         variants,
@@ -114,7 +192,7 @@ router.get('/products', async (req, res) => {
 router.get('/products/:id', async (req, res) => {
   try {
     const result = await query(
-      `SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur, c.slug as category_slug
+      `SELECT p.*, c.name_en as category_name_en, c.name_ur as category_name_ur, c.slug as category_slug, c.parent_id as category_parent_id
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        WHERE p.id = ?`,
@@ -126,12 +204,7 @@ router.get('/products/:id', async (req, res) => {
     }
 
     const row = result.rows[0];
-    let variants = [];
-    try {
-      variants = row.variants_json ? JSON.parse(row.variants_json) : [];
-    } catch (e) {
-      variants = [];
-    }
+    const variants = normalizeVariants(row.variants_json, row.price, row.is_available, row.image_url);
 
     return res.json({
       success: true,
@@ -152,7 +225,7 @@ router.get('/products/:id', async (req, res) => {
  *   city,
  *   address,
  *   notes,
- *   items: [ { product_id, product_name_en, product_name_ur, variant, unit, quantity, unit_price, is_price_on_request } ]
+ *   items: [ { product_id, product_name_en, product_name_ur, variant, color, sku, unit, quantity, unit_price, is_price_on_request } ]
  * }
  */
 router.post('/orders', async (req, res) => {
@@ -214,6 +287,8 @@ router.post('/orders', async (req, res) => {
         product_name_en: item.product_name_en || 'Item',
         product_name_ur: item.product_name_ur || 'آئٹم',
         variant: item.variant || '',
+        color: item.color || '',
+        sku: item.sku || '',
         unit: item.unit || 'Piece',
         quantity: qty,
         unit_price: unitPrice,
@@ -247,19 +322,21 @@ router.post('/orders', async (req, res) => {
     const createdOrder = orderResult.rows[0];
     const orderId = createdOrder.id;
 
-    // Insert order items
+    // Insert order items with variant and color
     for (const item of validatedItems) {
       await query(
         `INSERT INTO order_items (
-          order_id, product_id, product_name_en, product_name_ur, variant, unit,
+          order_id, product_id, product_name_en, product_name_ur, variant, color, sku, unit,
           quantity, unit_price, is_price_on_request, line_total
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           orderId,
           item.product_id,
           item.product_name_en,
           item.product_name_ur,
           item.variant,
+          item.color,
+          item.sku,
           item.unit,
           item.quantity,
           item.unit_price,

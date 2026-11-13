@@ -124,6 +124,7 @@ export const api = {
 
   // Admin Categories
   getAdminCategories: () => request('/api/admin/categories'),
+  getCategoryUsage: (id) => request(`/api/admin/categories/${id}/usage`),
   createCategory: (catData) =>
     request('/api/admin/categories', {
       method: 'POST',
@@ -134,9 +135,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(catData),
     }),
-  deleteCategory: (id) =>
+  deleteCategory: (id, options = {}) =>
     request(`/api/admin/categories/${id}`, {
       method: 'DELETE',
+      body: JSON.stringify(options),
     }),
 
   // Admin Settings

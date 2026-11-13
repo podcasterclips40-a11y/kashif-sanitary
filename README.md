@@ -58,15 +58,43 @@ A modern, mobile-friendly, dual-language (English & Urdu with native Right-to-Le
 
 ### 📊 Product-Wise Purchasing Summary (Wholesale Procurement)
 A dedicated aggregate procurement view built specifically for wholesale bulk purchasing:
-- **Combines quantities from selected active customer orders** into one aggregated total for each product and size/variant.
-  - *Example:* If **Shop 1** orders 100 L-bows and 50 sockets, and **Shop 2** orders 200 L-bows and 200 sockets, the Purchasing Summary shows:
-    - `PPRC 90° Elbow (1/2 inch): 300 Pieces`
-    - `PPRC Socket (1/2 inch): 250 Pieces`
+- **Combines quantities from selected active customer orders** into one aggregated total for each product and exact variant/color.
+  - *Example:* If **Shop 1** orders 2 Chrome Faucets and 1 Black Faucet, and **Shop 2** orders 3 Black Faucets, the Purchasing Summary totals them separately:
+    - `Luxury Basin Faucet (Variant: Chrome Finish • Color: Chrome): 2 Pieces`
+    - `Luxury Basin Faucet (Variant: Matte Black • Color: Matte Black): 4 Pieces`
 - **Dynamic Recalculation:** Select or deselect individual orders or filter by order status (`New`, `Confirmed`, `Preparing`). Cancelled orders are excluded automatically.
-- **Different Sizes Kept Separate:** Different sizes and variants are kept on distinct rows.
-- **Client Breakdown:** Expand any product to see exactly which shops contributed to the total.
+- **Different Colors & Variants Kept Separate:** Guaranteed separate totals for variants with different colors or sizes.
+- **Client Breakdown:** Expand any product to see exactly which shops and customer orders contributed to the total.
 - **Printable Procurement Sheet:** One-click print for taking to factory suppliers or warehouse shelves.
-- **Dynamic Product Compatibility:** Seamlessly works with all products added later through the admin panel.
+- **Dynamic Product Compatibility:** Seamlessly works with all newly created categories, subcategories, products, and color variants without code changes.
+
+---
+
+### 🗂️ Nested Product Categories & Subcategories
+- **Multi-Level Hierarchy:** Organize the catalog into main categories and subcategories with arbitrary depth (e.g., `Sanitary Ware → Wash Basins → Wall Hung` or `Sanitary Ware → Wash Basins → Counter Top`).
+- **Admin Management:** Create, rename, reorder (display order), and delete categories and subcategories directly in the Admin Portal under the **Categories** tab.
+- **Safe Category Deletion & Reassignment:** When deleting a category that contains products or child subcategories, the admin is prompted to:
+  1. **Reassign:** Move all products and child subcategories safely to another chosen category.
+  2. **Detach:** Keep products as uncategorized and promote child subcategories to top-level.
+  - *Products are never silently or accidentally erased from the database!*
+- **Customer Navigation & Breadcrumbs:**
+  - Primary category pill bar displays main top-level categories.
+  - Selecting a category reveals an interactive subcategory drill-down bar for quick filtering.
+  - Clickable breadcrumbs (`Home → Sanitary Ware → Wash Basins → Wall Hung`) enable one-tap navigation back up the tree.
+  - Selecting a parent category automatically includes all products under its descendant subcategories.
+
+---
+
+### 🎨 Product Variants, Colors & Options
+- **Multi-Variant Products Without Duplication:** A single product can hold multiple sizes, colors, models, or materials without creating clutter or duplicate product listings.
+- **Rich Variant Properties:**
+  - **Color & Swatch:** Color name (e.g., `Chrome`, `Matte Black`, `Gold`, `White`) and visual color code/hex (e.g., `#C0C0C0`, `#1A1A1A`) rendered as interactive visual color swatches.
+  - **Size / Model:** Size specifications (e.g., `1/2 inch (20mm)`, `3/4 inch`, `Wall Hung`, `Tall Body`).
+  - **SKU / Code:** Unique barcode or model code per variant (e.g., `FAU-CHR-01`, `FAU-BLK-01`).
+  - **Price & Request Price:** Individual price override per variant or inheritance of the product base price, plus individual "Price on Request" toggles.
+  - **Stock Tracking:** Optional stock tracking per variant with live remaining stock counts.
+  - **Variant Images:** Individual image URLs for different color variants, dynamically swapping the main product preview when a customer picks that color.
+- **Customer Order Integration:** The selected color and variant are saved with each customer order line item and displayed across invoices, delivery challans, 58mm/80mm thermal POS receipts, and the Purchasing Summary.
 
 ---
 
@@ -260,6 +288,55 @@ Standard browser printing via the system print dialog is the reliable, universal
 
 > [!NOTE]
 > Web Bluetooth and WebUSB browser APIs require unencrypted experimental flags and vary widely across printer firmware chipsets. Using the operating system print spooler (Windows/Mac printer driver or Android print service) ensures 100% compatibility with any thermal printer model.
+
+---
+
+## 🗂️ Managing Nested Categories, Subcategories & Product Variants
+
+### 1. Creating Nested Categories & Subcategories
+1. Log in to the **Admin Portal** (`/admin`).
+2. Navigate to the **Categories** tab.
+3. Click **"Add Category"** (or click the **`+`** icon on any existing category row to create a child under it).
+4. In the category modal:
+   - **Parent Category:**
+     - Select **`-- Top-Level / Main Category (No Parent) --`** to create a root category (e.g. `Sanitary Ware`).
+     - Or choose an existing category as the parent to create a subcategory (e.g. choose `Sanitary Ware` to create `Wash Basins`).
+     - Or choose a subcategory as parent to create a 2nd-level subcategory (e.g. choose `Wash Basins` to create `Wall Hung`).
+   - Enter **Category Name (English)** and **Category Name (Urdu)**.
+   - Enter a clean URL slug (e.g. `wall-hung`) and display order number.
+5. Click **"Save Category"**. The category immediately appears in the hierarchical tree table with its level badge (`L2 Sub`, `L3 Sub`).
+
+### 2. Safely Deleting Categories Without Losing Products
+1. In the **Categories** tab, click the **Trash icon** (`🗑️`) next to any category.
+2. If the category contains products or subcategories, the **Safe Deletion Modal** will open displaying the exact product count and child subcategory count.
+3. Choose one of two safe handling actions:
+   - **Reassign products & subcategories (Recommended):** Select another target category from the dropdown. All products and subcategories will be moved cleanly.
+   - **Detach items:** Detach products so they remain in the catalog as Uncategorized, while child subcategories are promoted to top-level categories.
+4. Click **"Confirm & Delete Category"**. Products are never silently deleted.
+
+### 3. Adding Products with Multiple Colors, Sizes & Variants
+1. Navigate to the **Products Catalog** tab and click **"Add New Product"**.
+2. Enter the product names in English and Urdu, select its category/subcategory from the nested hierarchy, and specify unit and base price.
+3. In the **Product Variants, Colors & Sizes** section, click **"Add Variant / Color"**:
+   - **Variant / Option Name:** e.g. `Chrome Finish` or `Matte Black`.
+   - **Color Name:** e.g. `Chrome`, `Matte Black`, `Gold`, `White`.
+   - **Color Code / Hex:** Pick or type a hex color (e.g. `#C0C0C0`, `#1A1A1A`) to show as an interactive color swatch on the store.
+   - **Size / Model:** e.g. `Standard`, `1/2 inch`, `Wall Hung`.
+   - **Variant SKU:** e.g. `BM-CHR-01`, `BM-BLK-01`.
+   - **Price (PKR):** Set an individual price for this variant (or leave it to inherit base product price).
+   - **Stock Quantity & Tracking:** Enable **Track Stock Quantity** to manage real inventory levels.
+   - **Variant Image URL:** (Optional) Add a dedicated image for this specific color variant.
+4. Click **"Save Product"**.
+
+### 4. Customer Experience & Purchasing Summary Verification
+1. On the customer website:
+   - Customers see the main top-level category pills.
+   - Selecting a category reveals the secondary subcategory pills and clickable breadcrumb navigation.
+   - On the product card, customers can click interactive color swatches or the variant dropdown. The photo, price, and SKU update dynamically.
+   - When added to the order, the exact color and variant are displayed in the cart drawer.
+2. In the Admin **Purchasing Summary**:
+   - Every product variant and color is automatically grouped and totaled separately (e.g., `Luxury Basin Faucet (Chrome)` and `Luxury Basin Faucet (Matte Black)` have separate aggregated quantities).
+   - Expanding the row reveals the individual shops and customer orders that requested that exact variant.
 
 ---
 

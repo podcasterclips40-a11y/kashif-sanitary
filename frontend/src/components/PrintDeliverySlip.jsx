@@ -134,7 +134,9 @@ export default function PrintDeliverySlip({ order, onClose, onOpenThermal, setti
                       <div className="text-[11px] text-slate-500 font-urdu">{item.product_name_ur}</div>
                     </td>
                     <td className="p-2 border border-slate-300 text-center font-mono text-slate-700">
-                      {item.variant || 'Standard'}
+                      {item.variant && item.color
+                        ? `${item.variant} • ${item.color}`
+                        : item.variant || item.color || 'Standard'}
                     </td>
                     <td className="p-2 border border-slate-300 text-center">{item.unit || 'Piece'}</td>
                     <td className="p-2 border border-slate-300 text-center font-mono font-bold text-sm text-slate-900">

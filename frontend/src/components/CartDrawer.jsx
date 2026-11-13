@@ -80,6 +80,8 @@ export default function CartDrawer() {
           product_name_en: it.product_name_en,
           product_name_ur: it.product_name_ur,
           variant: it.variant,
+          color: it.color || '',
+          sku: it.sku || '',
           unit: it.unit,
           quantity: it.quantity,
           unit_price: it.unit_price,
@@ -166,10 +168,19 @@ export default function CartDrawer() {
                         <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
                           {displayName}
                         </h4>
-                        {item.variant && (
-                          <span className="inline-block mt-0.5 px-2 py-0.5 rounded bg-brand-50 text-brand-700 text-[11px] font-semibold border border-brand-200">
-                            {item.variant}
-                          </span>
+                        {(item.variant || item.color) && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.variant && (
+                              <span className="inline-block px-2 py-0.5 rounded bg-brand-50 text-brand-700 text-[11px] font-semibold border border-brand-200">
+                                {item.variant}
+                              </span>
+                            )}
+                            {item.color && (
+                              <span className="inline-block px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 text-[11px] font-semibold border border-slate-300">
+                                {t('color')}: {item.color}
+                              </span>
+                            )}
+                          </div>
                         )}
                         <div className="mt-1 text-xs text-slate-500 flex items-center gap-2">
                           <span>Unit: {item.unit}</span>
