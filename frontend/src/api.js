@@ -18,6 +18,11 @@ async function request(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
+  // If payload is FormData (file upload), let browser set boundary header automatically
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -148,4 +153,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(settingsData),
     }),
+
+  // Admin Image Uploads & Storage
+  uploadImage: (file, folder = 'products') => {
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('folder', folder);
+    return request('/api/admin/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  getStorageStatus: () => request('/api/admin/storage/status'),
 };

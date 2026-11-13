@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { api } from '../../api.js';
+import ImageUploader from '../../components/ImageUploader.jsx';
 import {
   Plus,
   Edit2,
@@ -17,6 +18,8 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
+  Camera,
+  Upload,
 } from 'lucide-react';
 
 export default function ProductsManager() {
@@ -703,19 +706,14 @@ export default function ProductsManager() {
                 </div>
               </div>
 
-              {/* Main Image URL */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {t('imageUrl')}
-                </label>
-                <input
-                  type="url"
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full text-xs sm:text-sm px-3 py-2 border border-slate-300 rounded-lg font-mono"
-                />
-              </div>
+              {/* Main Product Cover Image (Upload from phone/tablet/PC or URL) */}
+              <ImageUploader
+                label={lang === 'ur' ? 'پروڈکٹ کور تصویر (فون سے اپلوڈ کریں)' : 'Product Cover Image (Upload from Device / Phone)'}
+                value={formData.image_url}
+                onChange={(url) => setFormData({ ...formData, image_url: url })}
+                folder="products"
+                aspectRatio="aspect-[4/3]"
+              />
 
               {/* Descriptions */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -897,14 +895,38 @@ export default function ProductsManager() {
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                              Variant Image URL (Optional)
-                            </label>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[10px] font-bold text-slate-600">
+                                Variant Image (Optional)
+                              </label>
+                              <label className="cursor-pointer text-[10px] text-brand-600 hover:text-brand-800 font-bold inline-flex items-center gap-0.5">
+                                <Camera className="w-3 h-3" />
+                                <span>Upload</span>
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files && e.target.files[0];
+                                    if (file) {
+                                      try {
+                                        const res = await api.uploadImage(file, 'products');
+                                        if (res.success && res.url) {
+                                          handleUpdateVariant(idx, 'image_url', res.url);
+                                        }
+                                      } catch (err) {
+                                        alert(err.message || 'Upload failed');
+                                      }
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
                             <input
                               type="url"
                               value={v.image_url || ''}
                               onChange={(e) => handleUpdateVariant(idx, 'image_url', e.target.value)}
-                              placeholder="https://..."
+                              placeholder="https://... or tap Upload"
                               className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg font-mono"
                             />
                           </div>

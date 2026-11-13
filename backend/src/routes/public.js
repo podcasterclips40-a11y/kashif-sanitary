@@ -115,7 +115,7 @@ router.get('/settings', async (req, res) => {
 router.get('/categories', async (req, res) => {
   try {
     const result = await query(
-      `SELECT c.id, c.parent_id, c.slug, c.name_en, c.name_ur, c.description_en, c.description_ur, c.icon, c.display_order,
+      `SELECT c.id, c.parent_id, c.slug, c.name_en, c.name_ur, c.description_en, c.description_ur, c.image_url, c.icon, c.display_order,
               p.name_en as parent_name_en, p.name_ur as parent_name_ur
        FROM categories c
        LEFT JOIN categories p ON c.parent_id = p.id

@@ -33,6 +33,7 @@ export async function initSchema() {
       name_ur TEXT NOT NULL,
       description_en TEXT DEFAULT '',
       description_ur TEXT DEFAULT '',
+      image_url TEXT DEFAULT '',
       icon TEXT DEFAULT 'Layers',
       display_order INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
@@ -104,6 +105,13 @@ export async function initSchema() {
   try {
     await query(`ALTER TABLE categories ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL`);
     console.log('[DB Migration] Added parent_id column to categories');
+  } catch (e) {
+    // Column already exists
+  }
+
+  try {
+    await query(`ALTER TABLE categories ADD COLUMN image_url TEXT DEFAULT ''`);
+    console.log('[DB Migration] Added image_url column to categories');
   } catch (e) {
     // Column already exists
   }

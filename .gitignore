@@ -4,3 +4,5 @@ node_modules
 *.db-journal
 dist
 .DS_Store
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep

@@ -318,13 +318,20 @@ export default function HomePage({ settings = {}, products = [], categories = []
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+                  className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all inline-flex items-center gap-1.5 ${
                     isActive
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  {catName}
+                  {cat.image_url && (
+                    <img
+                      src={cat.image_url}
+                      alt=""
+                      className="w-4 h-4 rounded-full object-cover shrink-0 border border-white/40"
+                    />
+                  )}
+                  <span>{catName}</span>
                 </button>
               );
             })}
@@ -374,6 +381,75 @@ export default function HomePage({ settings = {}, products = [], categories = []
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/* Active Category Cover Banner */}
+          {activeCategoryObj && (
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white p-5 sm:p-6 shadow-sm border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="space-y-1.5 text-center sm:text-start z-10 flex-1 min-w-0">
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[10px] font-bold tracking-wider uppercase border border-brand-500/30">
+                  {lang === 'ur' ? 'کیٹیگری تفصیل' : 'Category Overview'}
+                </span>
+                <h3 className="text-lg sm:text-2xl font-black truncate">
+                  {lang === 'ur' ? activeCategoryObj.name_ur : activeCategoryObj.name_en}
+                </h3>
+                {(activeCategoryObj.description_en || activeCategoryObj.description_ur) && (
+                  <p className="text-xs sm:text-sm text-slate-300 line-clamp-2">
+                    {lang === 'ur'
+                      ? (activeCategoryObj.description_ur || activeCategoryObj.description_en)
+                      : (activeCategoryObj.description_en || activeCategoryObj.description_ur)}
+                  </p>
+                )}
+              </div>
+
+              {activeCategoryObj.image_url ? (
+                <div className="w-full sm:w-48 h-28 rounded-xl overflow-hidden shrink-0 shadow-md border border-white/20 bg-slate-800">
+                  <img
+                    src={activeCategoryObj.image_url}
+                    alt={activeCategoryObj.name_en}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Browse Categories Cover Cards (shown on All Products view without search) */}
+          {selectedCategory === 'all' && !searchTerm && topLevelCategories.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <FolderTree className="w-4 h-4 text-brand-600" />
+                  <span>{lang === 'ur' ? 'نمایاں کیٹیگریز' : 'Browse Categories'}</span>
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {topLevelCategories.map((c) => {
+                  const fallbackCatImg = 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=400&q=80';
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedCategory(c.id)}
+                      className="group cursor-pointer rounded-2xl overflow-hidden bg-white border border-slate-200 hover:border-brand-500 shadow-xs hover:shadow-md transition-all flex flex-col"
+                    >
+                      <div className="aspect-[16/10] overflow-hidden bg-slate-100 relative">
+                        <img
+                          src={c.image_url || fallbackCatImg}
+                          alt={c.name_en}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="p-2.5 text-center flex-1 flex flex-col justify-center">
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-brand-600 transition-colors leading-tight">
+                          {lang === 'ur' ? c.name_ur : c.name_en}
+                        </h4>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -1,12 +1,82 @@
 import express from 'express';
+import multer from 'multer';
 import { query, db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { normalizeVariants } from './public.js';
+import { uploadImageBuffer, getStorageStatus, deleteImage } from '../services/storage.js';
 
 const router = express.Router();
 
+// Configure multer for memory buffer uploads (up to 10MB)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype.toLowerCase())) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file format. Please upload JPG, PNG, or WebP images.'));
+    }
+  },
+});
+
 // Enforce admin authentication for every route in this router
 router.use(requireAdmin);
+
+/**
+ * GET /api/admin/storage/status
+ * Check storage status (Cloudinary vs Local Fallback)
+ */
+router.get('/storage/status', (req, res) => {
+  return res.json({ success: true, ...getStorageStatus() });
+});
+
+/**
+ * POST /api/admin/upload
+ * Handles product cover and category cover image uploads from mobile, tablet, or desktop
+ */
+router.post('/upload', (req, res, next) => {
+  upload.single('image')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'File size too large. Maximum allowed size is 10 MB.' });
+      }
+      return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No image file uploaded' });
+    }
+
+    const folder = req.body.folder || req.query.folder || 'products';
+    const result = await uploadImageBuffer(req.file.buffer, {
+      folder,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      req,
+    });
+
+    return res.json({
+      success: true,
+      url: result.url,
+      provider: result.provider,
+      public_id: result.public_id,
+      format: result.format,
+      message: 'Image uploaded successfully',
+    });
+  } catch (error) {
+    console.error('[Upload Error]:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Image upload failed' });
+  }
+});
 
 /**
  * GET /api/admin/stats
@@ -511,6 +581,7 @@ router.post('/categories', async (req, res) => {
       name_ur,
       description_en = '',
       description_ur = '',
+      image_url = '',
       icon = 'Layers',
       display_order = 0
     } = req.body;
@@ -523,10 +594,10 @@ router.post('/categories', async (req, res) => {
     const parentIdVal = parent_id ? Number(parent_id) : null;
 
     const result = await query(
-      `INSERT INTO categories (parent_id, slug, name_en, name_ur, description_en, description_ur, icon, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO categories (parent_id, slug, name_en, name_ur, description_en, description_ur, image_url, icon, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
-      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0]
+      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, image_url || '', icon, display_order || 0]
     );
 
     return res.status(201).json({ success: true, category: result.rows[0] });
@@ -545,6 +616,7 @@ router.put('/categories/:id', async (req, res) => {
       name_ur,
       description_en = '',
       description_ur = '',
+      image_url = '',
       icon = 'Layers',
       display_order = 0,
       is_active = 1
@@ -571,11 +643,12 @@ router.put('/categories/:id', async (req, res) => {
         name_ur = ?,
         description_en = ?,
         description_ur = ?,
+        image_url = ?,
         icon = ?,
         display_order = ?,
         is_active = ?
        WHERE id = ?`,
-      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, icon, display_order || 0, is_active ? 1 : 0, catId]
+      [parentIdVal, safeSlug, name_en.trim(), name_ur.trim(), description_en, description_ur, image_url || '', icon, display_order || 0, is_active ? 1 : 0, catId]
     );
 
     return res.json({ success: true, message: 'Category updated successfully' });

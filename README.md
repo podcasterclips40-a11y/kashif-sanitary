@@ -340,6 +340,81 @@ Standard browser printing via the system print dialog is the reliable, universal
 
 ---
 
+## 📸 Product & Category Image Upload Guide (Phone & Web)
+
+The admin panel allows you to upload high-resolution cover images for any product, variant, or category directly from your mobile phone, tablet, or PC. Images are saved permanently in cloud storage and linked to your Turso database.
+
+### 📱 How to Upload or Replace a Product Cover Image from Your Phone
+
+1. **Open the Admin Portal on Your Phone:**
+   - Open Chrome or Safari on your phone and go to your website: `https://your-site.netlify.app/admin` (or `http://<your-ip>:5173/admin` locally).
+   - Log in with your admin credentials.
+2. **Go to Products:**
+   - Tap the **Products Catalog** tab.
+   - Tap **"Add New Product"** (or tap the **Edit** pencil icon on an existing product).
+3. **Upload the Image:**
+   - Under **Product Cover Image**, tap the dashed box:
+     > **"Tap to upload cover image (Phone Library, Camera, or Files)"**
+   - Your phone will display its native selection sheet:
+     - **Photo Library / Gallery:** Pick an existing photo of the sanitary product.
+     - **Take Photo / Camera:** Snap a photo right from your warehouse or shop shelf!
+     - **Browse / Files:** Pick an image from your downloads or cloud drive.
+   - The image is automatically compressed and resized in your phone's browser before upload (saving mobile data and ensuring instantaneous uploads), then sent to persistent cloud storage.
+   - A live preview appears immediately.
+4. **Replace or Remove:**
+   - Tap **"Replace Image"** if you want to pick another photo.
+   - Tap **"Remove"** to clear the image.
+5. **Save:**
+   - Tap **"Save Product"**. The photo is immediately saved in the database and visible across all customer product cards, search results, and cart items.
+
+---
+
+### 📁 How to Upload or Replace a Category Cover Image from Your Phone
+
+1. In the **Admin Portal**, tap the **Categories** tab.
+2. Tap **"Add Category"** (or tap the **Edit** pencil icon next to an existing category or subcategory).
+3. Under **Category Cover Image**, tap the upload box and select a photo from your phone's gallery or camera.
+4. A live 16:9 banner preview will appear.
+5. Tap **"Save Category"**.
+6. On the customer website:
+   - The category thumbnail appears inside the navigation pills.
+   - The category cover card appears in the homepage "Browse Categories" showcase.
+   - When a customer clicks the category, the high-resolution category banner is displayed at the top of the section.
+
+---
+
+### ☁️ Persistent Cloud Storage Setup (Cloudinary & Render)
+
+Uploaded images are hosted on **Cloudinary**, a leading fast global media cloud that automatically compresses, converts to WebP/AVIF, and serves images through a worldwide CDN.
+
+> [!NOTE]
+> **Automatic Fallback:** If Cloudinary environment variables are not yet configured on your server, the backend automatically uses safe local storage (`/uploads/`) so you can test uploads immediately without any configuration. To make uploads **persistent in production** across Render server redeployments, configure the three Cloudinary variables below.
+
+#### Step 1: Get Free Cloudinary Credentials (Takes 1 minute)
+1. Sign up for a free account at [https://cloudinary.com/users/register_free](https://cloudinary.com/users/register_free).
+2. Go to your **Dashboard**.
+3. Under **Product Environment Credentials**, copy these three values:
+   - **Cloud Name** (e.g. `kashif-sanitary`)
+   - **API Key** (e.g. `123456789012345`)
+   - **API Secret** (e.g. `abcdefghijklmnopqrstuvwxyz123`)
+
+#### Step 2: Configure Environment Variables in Render
+1. Log in to your [Render Dashboard](https://dashboard.render.com).
+2. Select your **kashif-sanitary-backend** Web Service.
+3. In the left navigation, click **Environment**.
+4. Click **Add Environment Variable** and add the following three keys:
+
+| Environment Variable | Value | Notes |
+| :--- | :--- | :--- |
+| `CLOUDINARY_CLOUD_NAME` | *(Your Cloudinary Cloud Name)* | e.g. `dxyza123` |
+| `CLOUDINARY_API_KEY` | *(Your Cloudinary API Key)* | 15-digit number |
+| `CLOUDINARY_API_SECRET` | *(Your Cloudinary API Secret)* | Secret key string |
+
+5. Click **Save Changes**. Render will automatically redeploy your backend in 60 seconds with persistent cloud file storage active!
+6. All future image uploads will be hosted persistently on Cloudinary with secure HTTPS links.
+
+---
+
 ## 🛠️ Local Development Setup
 
 To run the full stack locally on your computer:

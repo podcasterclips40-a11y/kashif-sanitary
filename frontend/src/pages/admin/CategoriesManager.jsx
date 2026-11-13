@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.jsx';
 import { api } from '../../api.js';
-import { Plus, Edit2, Trash2, Layers, X, AlertCircle, CornerDownRight, FolderTree, AlertTriangle } from 'lucide-react';
+import ImageUploader from '../../components/ImageUploader.jsx';
+import { Plus, Edit2, Trash2, Layers, X, AlertCircle, CornerDownRight, FolderTree, AlertTriangle, ImageIcon } from 'lucide-react';
 
 export default function CategoriesManager() {
   const { lang, t, isRtl } = useLanguage();
@@ -28,6 +29,7 @@ export default function CategoriesManager() {
     slug: '',
     description_en: '',
     description_ur: '',
+    image_url: '',
     display_order: 0,
     is_active: 1,
   });
@@ -59,6 +61,7 @@ export default function CategoriesManager() {
       slug: '',
       description_en: '',
       description_ur: '',
+      image_url: '',
       display_order: categories.length + 1,
       is_active: 1,
     });
@@ -75,6 +78,7 @@ export default function CategoriesManager() {
       slug: cat.slug || '',
       description_en: cat.description_en || '',
       description_ur: cat.description_ur || '',
+      image_url: cat.image_url || '',
       display_order: cat.display_order ?? 0,
       is_active: cat.is_active ?? 1,
     });
@@ -290,7 +294,7 @@ export default function CategoriesManager() {
 
                       <td className="p-3 sm:p-4">
                         <div
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-2.5"
                           style={{
                             paddingInlineStart: `${cat.depth * 22}px`,
                           }}
@@ -298,6 +302,13 @@ export default function CategoriesManager() {
                           {isSub && (
                             <CornerDownRight className="w-3.5 h-3.5 text-brand-500 shrink-0 rtl:scale-x-[-1]" />
                           )}
+
+                          <img
+                            src={cat.image_url || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=120&q=80'}
+                            alt={cat.name_en}
+                            className="w-9 h-9 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200"
+                          />
+
                           <div>
                             <div className="font-bold text-slate-900 flex items-center gap-2">
                               <span>{cat.name_en}</span>
@@ -473,6 +484,16 @@ export default function CategoriesManager() {
                   />
                 </div>
               </div>
+
+              {/* Category Cover Image Uploader */}
+              <ImageUploader
+                label={lang === 'ur' ? 'کیٹیگری کور تصویر (فون یا ڈیوائس سے اپلوڈ کریں)' : 'Category Cover Image (Upload from Phone / Device)'}
+                value={formData.image_url}
+                onChange={(url) => setFormData({ ...formData, image_url: url })}
+                folder="categories"
+                aspectRatio="aspect-[16/9]"
+                fallbackPlaceholder="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80"
+              />
 
               <div className="pt-4 border-t border-slate-200 flex justify-end gap-3">
                 <button

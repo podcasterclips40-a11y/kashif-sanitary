@@ -47,6 +47,10 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Static uploads directory (for local fallback and dev assets)
+const uploadsDir = path.resolve(__dirname, '../public/uploads');
+app.use('/uploads', express.static(uploadsDir));
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
