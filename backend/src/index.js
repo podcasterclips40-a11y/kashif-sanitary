@@ -47,6 +47,14 @@ app.use(
 app.use(express.json());
 app.use(morgan('dev'));
 
+// URL normalization middleware to prevent double-slash (//) 404 errors
+app.use((req, res, next) => {
+  if (req.url && req.url.includes('//')) {
+    req.url = req.url.replace(/\/{2,}/g, '/');
+  }
+  next();
+});
+
 // Static uploads directory (for local fallback and dev assets)
 const uploadsDir = path.resolve(__dirname, '../public/uploads');
 app.use('/uploads', express.static(uploadsDir));
@@ -55,6 +63,16 @@ app.use('/uploads', express.static(uploadsDir));
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Resilient Route Aliases: support /api/upload and /admin/upload directly to adminRoutes
+app.use('/api/upload', (req, res, next) => {
+  req.url = '/upload';
+  adminRoutes(req, res, next);
+});
+app.use('/admin/upload', (req, res, next) => {
+  req.url = '/upload';
+  adminRoutes(req, res, next);
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

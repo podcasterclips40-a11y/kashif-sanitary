@@ -1,4 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+// Clean and normalize API base URL (strips trailing slashes to prevent double-slash //api 404 errors)
+const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const BASE_URL = RAW_BASE_URL.trim().replace(/\/+$/, '');
 
 function getAuthHeaders() {
   const token = localStorage.getItem('kss_admin_token');
@@ -12,7 +14,8 @@ function getAuthHeaders() {
 }
 
 async function request(endpoint, options = {}) {
-  const url = `${BASE_URL}${endpoint}`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${BASE_URL}${cleanEndpoint}`;
   const headers = {
     ...getAuthHeaders(),
     ...(options.headers || {}),
@@ -47,8 +50,17 @@ export const api = {
   // Image URL Resolver (resolves relative backend endpoints to backend host)
   getImageUrl: (url) => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
-    if (url.startsWith('/api/')) return `${BASE_URL}${url}`;
+    if (url.startsWith('data:')) return url;
+    // Clean up legacy localhost:5000 URLs so images work properly on phones & Netlify
+    if (url.includes('localhost:5000/api/public/images/')) {
+      const path = url.split('localhost:5000')[1];
+      return BASE_URL ? `${BASE_URL}${path}` : path;
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    if (cleanUrl.startsWith('/api/')) {
+      return BASE_URL ? `${BASE_URL}${cleanUrl}` : cleanUrl;
+    }
     return url;
   },
 

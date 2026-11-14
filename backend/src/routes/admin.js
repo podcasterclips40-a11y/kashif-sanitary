@@ -85,8 +85,9 @@ router.post('/upload', (req, res, next) => {
 
     return res.json({
       success: true,
-      url: fullUrl,
+      url: result.url,
       relative_url: result.url,
+      full_url: fullUrl,
       uuid: result.uuid,
       filename: result.filename,
       size: result.size,
