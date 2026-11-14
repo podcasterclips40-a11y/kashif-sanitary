@@ -5,7 +5,7 @@
 # Proxy /api requests to Render backend
 [[redirects]]
   from = "/api/*"
-  to = "https://kashif-sanitary-backend.onrender.com/api/:splat"
+  to = "https://kashif-sanitary.onrender.com/api/:splat"
   status = 200
   force = true
 

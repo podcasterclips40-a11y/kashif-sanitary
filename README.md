@@ -169,8 +169,8 @@ flowchart LR
    | `JWT_EXPIRES_IN` | `7d` |
    | `CORS_ORIGIN` | Your Netlify URL (e.g. `https://kashif-sanitary.netlify.app`) |
 7. Click **Deploy Web Service**.
-8. Once deployed, Render will provide a live URL (e.g. `https://kashif-sanitary-backend.onrender.com`).
-   - Check `https://kashif-sanitary-backend.onrender.com/api/health` to confirm the database is connected.
+8. Once deployed, Render will provide a live URL (e.g. `https://kashif-sanitary.onrender.com`).
+   - Check `https://kashif-sanitary.onrender.com/api/health` to confirm the database is connected.
 
 ---
 
@@ -186,7 +186,7 @@ flowchart LR
 5. Under **Environment variables**, add:
    | Key | Value |
    | :--- | :--- |
-   | `VITE_API_BASE_URL` | Your live Render backend URL (e.g. `https://kashif-sanitary-backend.onrender.com`) |
+   | `VITE_API_BASE_URL` | Your live Render backend URL (e.g. `https://kashif-sanitary.onrender.com`) |
 6. Click **Deploy Site**.
 7. Netlify will build your site and give you a public URL (e.g. `https://kashif-sanitary.netlify.app`).
 8. Copy your Netlify URL and update the `CORS_ORIGIN` variable in your Render backend settings so CORS allows requests.
