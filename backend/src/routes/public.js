@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { query, db } from '../db.js';
+import { getImageFromTurso } from '../services/turso-storage.js';
 
 const router = express.Router();
 
@@ -126,6 +127,40 @@ router.get('/categories', async (req, res) => {
   } catch (error) {
     console.error('[Public Categories Error]:', error);
     return res.status(500).json({ success: false, error: 'Failed to fetch categories' });
+  }
+});
+
+/**
+ * GET /api/public/images/:uuid
+ * Serves image BLOBs directly from Turso database with HTTP caching
+ */
+router.get('/images/:uuid', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const image = await getImageFromTurso(uuid);
+
+    if (!image || !image.data) {
+      return res.status(404).json({ success: false, error: 'Image not found' });
+    }
+
+    // HTTP Cache validation (ETag / If-None-Match)
+    const etag = `"${image.uuid}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('Content-Type', image.mimetype || 'image/jpeg');
+    res.setHeader('Content-Length', image.size || image.data.length);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('ETag', etag);
+    if (image.created_at) {
+      res.setHeader('Last-Modified', new Date(image.created_at).toUTCString());
+    }
+
+    return res.end(image.data);
+  } catch (error) {
+    console.error('[Image Serving Error]:', error);
+    return res.status(500).json({ success: false, error: 'Failed to serve image' });
   }
 });
 

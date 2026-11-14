@@ -44,6 +44,14 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  // Image URL Resolver (resolves relative backend endpoints to backend host)
+  getImageUrl: (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+    if (url.startsWith('/api/')) return `${BASE_URL}${url}`;
+    return url;
+  },
+
   // Public APIs
   getSettings: () => request('/api/public/settings'),
   getCategories: () => request('/api/public/categories'),

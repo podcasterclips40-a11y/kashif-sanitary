@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { api } from '../api.js';
 import {
-  UploadCloud,
+  Database,
   Image as ImageIcon,
   Trash2,
   RefreshCw,
@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 
 /**
- * Helper to compress and downscale large mobile camera photos before upload
+ * Compresses and downscales photos in the browser before sending to Turso database.
+ * Keeps image quality clear and crisp while producing ~60-250 KB files.
  */
-async function compressImage(file, maxWidth = 1600, maxHeight = 1600, quality = 0.85) {
-  // If file is already small (under 1.2MB), no need to compress client-side
-  if (file.size <= 1.2 * 1024 * 1024) {
+async function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.82) {
+  // If file is already small (under 250KB), no need to re-encode
+  if (file.size <= 250 * 1024) {
     return file;
   }
 
@@ -51,7 +52,7 @@ async function compressImage(file, maxWidth = 1600, maxHeight = 1600, quality = 
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              return resolve(file); // fallback to original
+              return resolve(file);
             }
             const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
               type: 'image/jpeg',
@@ -87,11 +88,13 @@ export default function ImageUploader({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [manualUrl, setManualUrl] = useState(value || '');
 
+  // Resolved URL for rendering
+  const displaySrc = api.getImageUrl(value);
+
   const handleFileChange = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    // Reset messages
     setErrorMsg('');
     setSuccessMsg('');
 
@@ -106,25 +109,24 @@ export default function ImageUploader({
       return;
     }
 
-    // Validate size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg(
-        lang === 'ur'
-          ? 'تصویر کا سائز 10 ایم بی سے زیادہ ہے۔ براہ کرم چھوٹی تصویر منتخب کریں۔'
-          : 'File size exceeds 10 MB. Please choose a smaller image.'
-      );
-      return;
-    }
-
     try {
       setUploading(true);
-      setUploadProgress(20);
+      setUploadProgress(25);
 
-      // Mobile optimization: compress large photos before upload
+      // Downscale/compress image for Turso database storage
       const optimizedFile = await compressImage(file);
-      setUploadProgress(50);
+      setUploadProgress(55);
 
-      // Upload via backend API
+      // Validate size (max 2.5 MB after compression)
+      if (optimizedFile.size > 2.5 * 1024 * 1024) {
+        throw new Error(
+          lang === 'ur'
+            ? 'تصویر کا سائز 2.5 ایم بی سے زیادہ ہے۔ براہ کرم چھوٹی تصویر منتخب کریں۔'
+            : 'Image size exceeds 2.5 MB maximum limit for Turso database storage.'
+        );
+      }
+
+      // Upload directly into Turso database via backend API
       const res = await api.uploadImage(optimizedFile, folder);
 
       if (res.success && res.url) {
@@ -132,18 +134,19 @@ export default function ImageUploader({
         onChange(res.url);
         setManualUrl(res.url);
         setSuccessMsg(
-          lang === 'ur' ? 'تصویر کامیابی سے اپلوڈ ہو گئی!' : 'Image uploaded successfully!'
+          lang === 'ur'
+            ? 'تصویر کامیابی سے ٹرسو ڈیٹا بیس میں محفوظ ہو گئی!'
+            : 'Image saved directly in Turso database!'
         );
         setTimeout(() => setSuccessMsg(''), 3000);
       } else {
-        throw new Error(res.error || 'Failed to upload image');
+        throw new Error(res.error || 'Failed to save image in Turso database');
       }
     } catch (err) {
       console.error('Image Upload Error:', err);
       setErrorMsg(err.message || 'Failed to upload image. Please try again.');
     } finally {
       setUploading(false);
-      // Reset input value so same file can be re-selected if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -189,7 +192,7 @@ export default function ImageUploader({
             type="url"
             value={manualUrl}
             onChange={(e) => setManualUrl(e.target.value)}
-            placeholder="https://..."
+            placeholder="https://... or /api/public/images/..."
             className="flex-1 text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg font-mono bg-white"
           />
           <button
@@ -209,7 +212,7 @@ export default function ImageUploader({
           <div className="space-y-3">
             <div className={`relative ${aspectRatio} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shadow-xs max-h-56 mx-auto`}>
               <img
-                src={value}
+                src={displaySrc || fallbackPlaceholder}
                 alt="Cover Preview"
                 onError={(e) => {
                   e.target.src = fallbackPlaceholder;
@@ -220,15 +223,16 @@ export default function ImageUploader({
               {uploading && (
                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs flex flex-col items-center justify-center text-white p-4">
                   <RefreshCw className="w-6 h-6 animate-spin mb-2 text-brand-400" />
-                  <span className="text-xs font-bold">Uploading new image...</span>
+                  <span className="text-xs font-bold">Saving image in Turso database...</span>
                 </div>
               )}
             </div>
 
             {/* Action buttons */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <span className="text-[11px] text-slate-500 font-mono truncate max-w-xs" title={value}>
-                {value.startsWith('http') ? value.substring(0, 45) + '...' : value}
+              <span className="text-[11px] text-slate-500 font-mono truncate max-w-xs flex items-center gap-1" title={value}>
+                <Database className="w-3 h-3 text-brand-600 shrink-0" />
+                <span>{value.length > 40 ? value.substring(0, 40) + '...' : value}</span>
               </span>
 
               <div className="flex items-center gap-2">
@@ -272,7 +276,7 @@ export default function ImageUploader({
             {uploading ? (
               <div className="space-y-1">
                 <p className="text-xs font-bold text-slate-800">
-                  {lang === 'ur' ? 'تصویر کلاؤڈ پر اپلوڈ ہو رہی ہے...' : 'Uploading image to cloud storage...'}
+                  {lang === 'ur' ? 'تصویر ٹرسو ڈیٹا بیس میں محفوظ ہو رہی ہے...' : 'Saving image binary into Turso database...'}
                 </p>
                 <div className="w-36 h-1.5 bg-slate-200 rounded-full mx-auto overflow-hidden">
                   <div
@@ -289,7 +293,7 @@ export default function ImageUploader({
                     : 'Tap to upload cover image (Phone Library, Camera, or Files)'}
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  JPG, PNG, WebP • Maximum 10 MB • Auto-optimized for fast mobile loading
+                  JPG, PNG, WebP • Stored directly as BLOB in Turso database (Max 2.5 MB)
                 </p>
               </div>
             )}

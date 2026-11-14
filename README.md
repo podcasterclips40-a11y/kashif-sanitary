@@ -112,11 +112,11 @@ flowchart LR
     Customer["📱 Customer / Admin Browser"]
     Netlify["⚡ Netlify (Frontend React + Vite + Tailwind)"]
     Render["🚀 Render (Backend Node.js + Express API)"]
-    Turso[("🗄️ Turso (LibSQL Database)")]
+    Turso[("🗄️ Turso LibSQL Database\n(Data + Image Binary BLOBs)")]
 
-    Customer -->|Visits / Orders| Netlify
-    Netlify -->|API Requests / JWT Auth| Render
-    Render -->|LibSQL Protocol| Turso
+    Customer -->|Visits / Orders / Image Uploads| Netlify
+    Netlify -->|API Requests / Multipart Uploads| Render
+    Render -->|LibSQL Protocol / BLOB Streams| Turso
 ```
 
 | Component | Technology | Hosting Platform |
@@ -340,14 +340,51 @@ Standard browser printing via the system print dialog is the reliable, universal
 
 ---
 
-## 📸 Product & Category Image Upload Guide (Phone & Web)
+## 📸 Product & Category Image Upload Guide (Turso Database BLOB Storage)
 
-The admin panel allows you to upload high-resolution cover images for any product, variant, or category directly from your mobile phone, tablet, or PC. Images are saved permanently in cloud storage and linked to your Turso database.
+Product, variant, and category cover images are stored **directly inside your existing Turso LibSQL Database as binary BLOBs** (`uploaded_images` table). **No third-party image hosting (no Cloudinary, AWS S3, or Imgur) is needed**, keeping your hosting completely free, zero-maintenance, and consolidated within your existing Turso database account.
+
+### 🗄️ Turso BLOB Storage Architecture & Performance
+
+```
+Admin Phone/PC ➔ Client-Side Resizing (Max 1200px @ 82% quality, ~60–250 KB)
+              ➔ POST /api/admin/upload (Multer in-memory buffer)
+              ➔ Stored as BLOB in Turso LibSQL (`uploaded_images` table)
+              ➔ Served via GET /api/public/images/:uuid
+              ➔ HTTP 304 Caching + 1-Year Browser Cache (`immutable`, `ETag`)
+```
+
+- **Table Schema (`uploaded_images`):**
+  - `id`: Auto-incrementing primary key.
+  - `uuid`: Secure generated identifier (e.g. `img_p_1794614982792_eeo3nu`), completely masking original filenames.
+  - `entity_type`: `product`, `category`, or `variant`.
+  - `entity_id`: Related product or category ID if associated.
+  - `filename`: Sanitized original filename.
+  - `mimetype`: `image/jpeg`, `image/png`, `image/webp`.
+  - `size`: Exact byte size of the image payload.
+  - `data`: Binary `BLOB` column containing the image raw bytes.
+  - `created_at`: Upload timestamp.
+- **Maximum File Limit & Automatic Compression:**
+  - Hard server limit: **2.5 MB** per image.
+  - Client-side auto-optimization: When you select a photo on your phone (which might be 5 MB to 15 MB from a modern mobile camera), the browser automatically scales it down on an HTML5 canvas to a maximum dimension of 1200px at 0.82 JPEG quality.
+  - This shrinks typical mobile photos down to **60 KB – 250 KB** before sending over cellular data, resulting in lightning-fast uploads and crystal-clear display on retina screens.
+- **Zero-Redundancy HTTP Caching:**
+  - Image endpoint: `GET /api/public/images/:uuid`.
+  - Headers: `Cache-Control: public, max-age=31536000, immutable` and `ETag: "<uuid>"`.
+  - Supports `If-None-Match`: The browser downloads each image only once. Subsequent visits or page refreshes return an immediate `HTTP 304 Not Modified` without re-downloading image bytes from Turso.
+- **Storage Capacity on Turso Free Tier:**
+  - Turso's free tier provides **9 GB** of database storage.
+  - At ~150 KB per compressed image, storing 200 high-res product and category covers uses only **~30 MB** (less than 0.35% of your available database quota).
+- **Admin Storage Monitor:**
+  - Check storage metrics anytime via the authenticated endpoint: `GET /api/admin/storage/status`.
+  - Returns total image count, total database bytes consumed, and maximum file size limits.
+
+---
 
 ### 📱 How to Upload or Replace a Product Cover Image from Your Phone
 
 1. **Open the Admin Portal on Your Phone:**
-   - Open Chrome or Safari on your phone and go to your website: `https://your-site.netlify.app/admin` (or `http://<your-ip>:5173/admin` locally).
+   - Open Chrome, Safari, or any browser on your phone and go to your website: `https://your-site.netlify.app/admin` (or `http://<your-ip>:5173/admin` locally).
    - Log in with your admin credentials.
 2. **Go to Products:**
    - Tap the **Products Catalog** tab.
@@ -359,13 +396,13 @@ The admin panel allows you to upload high-resolution cover images for any produc
      - **Photo Library / Gallery:** Pick an existing photo of the sanitary product.
      - **Take Photo / Camera:** Snap a photo right from your warehouse or shop shelf!
      - **Browse / Files:** Pick an image from your downloads or cloud drive.
-   - The image is automatically compressed and resized in your phone's browser before upload (saving mobile data and ensuring instantaneous uploads), then sent to persistent cloud storage.
+   - The image is automatically compressed in your phone's browser before upload (saving mobile data and ensuring instantaneous uploads), then saved directly into Turso.
    - A live preview appears immediately.
 4. **Replace or Remove:**
    - Tap **"Replace Image"** if you want to pick another photo.
-   - Tap **"Remove"** to clear the image.
+   - Tap **"Remove"** to clear the image (shows standard high-contrast placeholder).
 5. **Save:**
-   - Tap **"Save Product"**. The photo is immediately saved in the database and visible across all customer product cards, search results, and cart items.
+   - Tap **"Save Product"**. The photo is immediately saved in Turso and visible across all customer product cards, search results, and cart items.
 
 ---
 
@@ -380,38 +417,6 @@ The admin panel allows you to upload high-resolution cover images for any produc
    - The category thumbnail appears inside the navigation pills.
    - The category cover card appears in the homepage "Browse Categories" showcase.
    - When a customer clicks the category, the high-resolution category banner is displayed at the top of the section.
-
----
-
-### ☁️ Persistent Cloud Storage Setup (Cloudinary & Render)
-
-Uploaded images are hosted on **Cloudinary**, a leading fast global media cloud that automatically compresses, converts to WebP/AVIF, and serves images through a worldwide CDN.
-
-> [!NOTE]
-> **Automatic Fallback:** If Cloudinary environment variables are not yet configured on your server, the backend automatically uses safe local storage (`/uploads/`) so you can test uploads immediately without any configuration. To make uploads **persistent in production** across Render server redeployments, configure the three Cloudinary variables below.
-
-#### Step 1: Get Free Cloudinary Credentials (Takes 1 minute)
-1. Sign up for a free account at [https://cloudinary.com/users/register_free](https://cloudinary.com/users/register_free).
-2. Go to your **Dashboard**.
-3. Under **Product Environment Credentials**, copy these three values:
-   - **Cloud Name** (e.g. `kashif-sanitary`)
-   - **API Key** (e.g. `123456789012345`)
-   - **API Secret** (e.g. `abcdefghijklmnopqrstuvwxyz123`)
-
-#### Step 2: Configure Environment Variables in Render
-1. Log in to your [Render Dashboard](https://dashboard.render.com).
-2. Select your **kashif-sanitary-backend** Web Service.
-3. In the left navigation, click **Environment**.
-4. Click **Add Environment Variable** and add the following three keys:
-
-| Environment Variable | Value | Notes |
-| :--- | :--- | :--- |
-| `CLOUDINARY_CLOUD_NAME` | *(Your Cloudinary Cloud Name)* | e.g. `dxyza123` |
-| `CLOUDINARY_API_KEY` | *(Your Cloudinary API Key)* | 15-digit number |
-| `CLOUDINARY_API_SECRET` | *(Your Cloudinary API Secret)* | Secret key string |
-
-5. Click **Save Changes**. Render will automatically redeploy your backend in 60 seconds with persistent cloud file storage active!
-6. All future image uploads will be hosted persistently on Cloudinary with secure HTTPS links.
 
 ---
 

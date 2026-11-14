@@ -3,15 +3,20 @@ import multer from 'multer';
 import { query, db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { normalizeVariants } from './public.js';
-import { uploadImageBuffer, getStorageStatus, deleteImage } from '../services/storage.js';
+import {
+  saveImageToTurso,
+  deleteImageFromTurso,
+  getTursoStorageStats,
+  MAX_IMAGE_SIZE_BYTES,
+} from '../services/turso-storage.js';
 
 const router = express.Router();
 
-// Configure multer for memory buffer uploads (up to 10MB)
+// Configure multer for memory buffer uploads into Turso BLOB (up to 2.5MB per image)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: MAX_IMAGE_SIZE_BYTES,
   },
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -28,21 +33,30 @@ router.use(requireAdmin);
 
 /**
  * GET /api/admin/storage/status
- * Check storage status (Cloudinary vs Local Fallback)
+ * Check Turso Database BLOB storage stats
  */
-router.get('/storage/status', (req, res) => {
-  return res.json({ success: true, ...getStorageStatus() });
+router.get('/storage/status', async (req, res) => {
+  try {
+    const stats = await getTursoStorageStats();
+    return res.json({ success: true, ...stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 /**
  * POST /api/admin/upload
  * Handles product cover and category cover image uploads from mobile, tablet, or desktop
+ * Stores the binary file directly as a BLOB in Turso database
  */
 router.post('/upload', (req, res, next) => {
   upload.single('image')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ success: false, error: 'File size too large. Maximum allowed size is 10 MB.' });
+        return res.status(400).json({
+          success: false,
+          error: 'File size too large. Maximum allowed size is 2.5 MB for database storage.',
+        });
       }
       return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
     } else if (err) {
@@ -57,24 +71,45 @@ router.post('/upload', (req, res, next) => {
     }
 
     const folder = req.body.folder || req.query.folder || 'products';
-    const result = await uploadImageBuffer(req.file.buffer, {
-      folder,
-      originalname: req.file.originalname,
+    const entityType = folder.includes('cat') ? 'category' : 'product';
+
+    const result = await saveImageToTurso(req.file.buffer, {
+      filename: req.file.originalname,
       mimetype: req.file.mimetype,
-      req,
+      entity_type: entityType,
     });
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:5000';
+    const fullUrl = `${protocol}://${host}${result.url}`;
 
     return res.json({
       success: true,
-      url: result.url,
-      provider: result.provider,
-      public_id: result.public_id,
-      format: result.format,
-      message: 'Image uploaded successfully',
+      url: fullUrl,
+      relative_url: result.url,
+      uuid: result.uuid,
+      filename: result.filename,
+      size: result.size,
+      mimetype: result.mimetype,
+      provider: 'turso_database',
+      message: 'Image stored successfully in Turso database',
     });
   } catch (error) {
     console.error('[Upload Error]:', error);
     return res.status(500).json({ success: false, error: error.message || 'Image upload failed' });
+  }
+});
+
+/**
+ * DELETE /api/admin/images/:uuid
+ * Deletes an image BLOB from Turso database
+ */
+router.delete('/images/:uuid', async (req, res) => {
+  try {
+    const success = await deleteImageFromTurso(req.params.uuid);
+    return res.json({ success, message: success ? 'Image deleted' : 'Image not found' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

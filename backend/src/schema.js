@@ -101,6 +101,28 @@ export async function initSchema() {
     );
   `);
 
+  // 7. Uploaded Images Table (Persistent Turso Database BLOB Storage)
+  await query(`
+    CREATE TABLE IF NOT EXISTS uploaded_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE NOT NULL,
+      entity_type TEXT NOT NULL DEFAULT 'product',
+      entity_id INTEGER DEFAULT NULL,
+      filename TEXT NOT NULL,
+      mimetype TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      data BLOB NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  try {
+    await query(`CREATE INDEX IF NOT EXISTS idx_uploaded_images_uuid ON uploaded_images(uuid)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_uploaded_images_entity ON uploaded_images(entity_type, entity_id)`);
+  } catch (e) {
+    // Indexes exist
+  }
+
   // Safe migrations for nested categories and product variants (preserves all existing data)
   try {
     await query(`ALTER TABLE categories ADD COLUMN parent_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL`);
